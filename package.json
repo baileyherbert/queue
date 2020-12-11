@@ -1,0 +1,20 @@
+{
+	"name": "@baileyherbert/queue",
+	"description": "Modern, promise-based queue.",
+	"version": "1.0.0",
+	"license": "MIT",
+	"author": "Bailey Herbert <hello@bailey.sh> (https://bailey.sh)",
+	"repository": "github:baileyherbert/queue",
+	"main": "./dist/index.js",
+	"typings": "./dist/index.d.ts",
+	"scripts": {
+		"build": "tsc"
+	},
+	"dependencies": {},
+	"devDependencies": {
+		"typescript": "^4.1.2"
+	},
+	"files": [
+		"dist"
+	]
+}

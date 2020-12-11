@@ -1,0 +1,27 @@
+{
+	"compilerOptions": {
+		"alwaysStrict": true,
+		"target": "es6",
+		"lib": ["es2016", "dom"],
+		"module": "commonjs",
+		"moduleResolution": "node",
+		"declaration": true,
+		"declarationMap": false,
+		"newLine": "lf",
+		"experimentalDecorators": true,
+		"sourceMap": false,
+		"noEmitOnError": true,
+		"strictBindCallApply": true,
+		"strictNullChecks": true,
+		"strictFunctionTypes": true,
+		"noImplicitAny": true,
+		"esModuleInterop": true,
+		"types": [],
+		"rootDir": "src",
+		"outDir": "dist"
+	},
+	"exclude": [
+		"node_modules",
+		"dist"
+	]
+}
