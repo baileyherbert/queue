@@ -71,19 +71,25 @@ new Queue({
 
 ## Methods
 
-### `Queue.push(fn)`
+### `Queue.push(fn, [options])`
 
 **Returns:** `void`\
 **Parameters:**
 - `fn: TaskFunction` – The function to execute.
+- `options?: TaskOptions` – Optional object with custom options for this task.
+  - `timeout` (number) – Sets the timeout for this specific task.
+  - `runImmediately` (boolean) – If true, the task always runs immediately.
 
 **Description:** Adds a task function to the queue. If `autoStart` is enabled in the queue options, the queue will be started automatically.
 
-### `Queue.pushAsync(fn)`
+### `Queue.pushAsync(fn, [options])`
 
 **Returns:** `Promise<void>`\
 **Parameters:**
 - `fn: TaskFunction` – The function to execute.
+- `options?: TaskOptions` – Optional object with custom options for this task.
+  - `timeout` (number) – Sets the timeout for this specific task.
+  - `runImmediately` (boolean) – If true, the task always runs immediately.
 
 **Description:** Adds a task function to the queue. If `autoStart` is enabled in the queue options, the queue will be started automatically. Returns a promise which resolves once the task has executed, and rejects with an `Error` if the task times out or throws an error.
 
