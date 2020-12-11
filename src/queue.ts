@@ -37,7 +37,7 @@ export class Queue<F extends TaskFunction = TaskFunction> extends EventEmitter<E
 	 * Whether or not this queue is currently running.
 	 */
 	public get active(): boolean {
-		return this.active;
+		return this._active;
 	}
 
 	/**
