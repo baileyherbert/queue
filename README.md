@@ -8,15 +8,15 @@ This is a modern queue class for running functions with a concurrency limit. It'
 import { Queue } from '@baileyherbert/queue';
 
 const queue = new Queue({
-	concurrency: 2,
-	defaultTimeout: 60000
+    concurrency: 2,
+    defaultTimeout: 60000
 });
 
 for (let i = 1; i <= 10; i++) {
-	queue.push(async function() {
-		console.log('Task', i);
-		await new Promise(r => setTimeout(r, 1000));
-	});
+    queue.push(async function() {
+        console.log('Task', i);
+        await new Promise(r => setTimeout(r, 1000));
+    });
 }
 ```
 
@@ -36,19 +36,19 @@ Create a new queue using the class constructor. All available options, along wit
 
 ```ts
 new Queue({
-	// Automatically start the queue after adding tasks
-	autoStart: true,
+    // Automatically start the queue after adding tasks
+    autoStart: true,
 
-	// Number of tasks that can run concurrently
-	maxConcurrentTasks: 1,
+    // Number of tasks that can run concurrently
+    maxConcurrentTasks: 1,
 
-	// Number of milliseconds to wait for tasks (0 to disable)
-	defaultTimeout: 0,
+    // Number of milliseconds to wait for tasks (0 to disable)
+    defaultTimeout: 0,
 
-	// Run tasks internally with a small delay
-	// This helps your app run smoothly with compute-heavy tasks
-	// It also makes promises and events work in reliable orders
-	useAsyncTicking: true
+    // Run tasks internally with a small delay
+    // This helps your app run smoothly with compute-heavy tasks
+    // It also makes promises and events work in reliable orders
+    useAsyncTicking: true
 });
 ```
 
@@ -119,52 +119,52 @@ The following snippet is a list of events and their typed parameters.
 
 ```ts
 interface Events {
-	/**
-	 * Emitted when the queue starts running a task.
-	 */
-	taskStarted: [task: TaskFunction];
+    /**
+     * Emitted when the queue starts running a task.
+     */
+    taskStarted: [task: TaskFunction];
 
-	/**
-	 * Emitted when a task is completed successfully.
-	 */
-	taskCompleted: [task: TaskFunction];
+    /**
+     * Emitted when a task is completed successfully.
+     */
+    taskCompleted: [task: TaskFunction];
 
-	/**
-	 * Emitted when a task timed out and was dropped
-	 * from the queue.
-	 */
-	taskTimedOut: [task: TaskFunction];
+    /**
+     * Emitted when a task timed out and was dropped
+     * from the queue.
+     */
+    taskTimedOut: [task: TaskFunction];
 
-	/**
-	 * Emitted when a task threw an error.
-	 */
-	taskFailed: [error: Error, task: TaskFunction];
+    /**
+     * Emitted when a task threw an error.
+     */
+    taskFailed: [error: Error, task: TaskFunction];
 
-	/**
-	 * Emitted when a task has finished. If the task timed out
-	 * or threw an error, the error will be provided as the
-	 * first parameter.
-	 */
-	taskFinished: [error: Error | undefined, task: TaskFunction];
+    /**
+     * Emitted when a task has finished. If the task timed out
+     * or threw an error, the error will be provided as the
+     * first parameter.
+     */
+    taskFinished: [error: Error | undefined, task: TaskFunction];
 
-	/**
-	 * Emitted when the queue is started. If `autoStart` is
-	 * enabled, this means the queue has started processing new
-	 * data.
-	 */
-	started: [];
+    /**
+     * Emitted when the queue is started. If `autoStart` is
+     * enabled, this means the queue has started processing new
+     * data.
+     */
+    started: [];
 
-	/**
-	 * Emitted when the queue is stopped, either manually or
-	 * because it has finished processing all tasks.
-	 */
-	stopped: [];
+    /**
+     * Emitted when the queue is stopped, either manually or
+     * because it has finished processing all tasks.
+     */
+    stopped: [];
 
-	/**
-	 * Emitted when the queue has finished processing all tasks.
-	 * The `stopped` event will also be emitted after this.
-	 */
-	finished: [];
+    /**
+     * Emitted when the queue has finished processing all tasks.
+     * The `stopped` event will also be emitted after this.
+     */
+    finished: [];
 };
 ```
 
@@ -172,15 +172,15 @@ You can listen for this events using the `on` and `once` methods. For example:
 
 ```ts
 queue.on('started', function() {
-	console.log('The queue has started.');
+    console.log('The queue has started.');
 });
 
 queue.on('taskFinished', function(error, task) {
-	if (error) {
-		console.error('Task failed:', error);
-	}
-	else {
-		console.log('Task finished successfully!');
-	}
+    if (error) {
+        console.error('Task failed:', error);
+    }
+    else {
+        console.log('Task finished successfully!');
+    }
 });
 ```
