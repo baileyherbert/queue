@@ -1,5 +1,6 @@
 import { QueueOptions, TaskOptions } from './common';
 import { EventEmitter } from './events';
+import { QueueGroup } from './queue.group';
 
 /**
  * A function queue for executing functions with a concurrency limit and timeouts.
@@ -51,6 +52,19 @@ export class FunctionQueue<F extends FunctionTask = FunctionTask> extends EventE
 	 */
 	public get length(): number {
 		return this._tasks.length + this._numRunningTasks;
+	}
+
+	/**
+	 * Creates and returns a queue group.
+	 *
+	 * A queue group is an interface for managing a subset of tasks in a larger queue. It offers the same `push` and
+	 * `pushAsync` methods, as well as the same events, but uses this queue as its underlying processor.
+	 *
+	 * You can create several groups for a queue, and they will all share the same underlying queue, but each group
+	 * will only emit events for their own tasks. Note that the queue itself will still emit events for all tasks.
+	 */
+	public createGroup(): QueueGroup<F> {
+		return new QueueGroup<F>(this);
 	}
 
 	/**
