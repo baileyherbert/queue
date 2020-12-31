@@ -1,34 +1,47 @@
+import { QueueOptions, TaskOptions } from './common';
 import { EventEmitter } from './events';
 
 /**
- * A simple queue class for processing items in batches or one at a time.
+ * An item queue for processing individual items with a concurrency limit and timeouts.
+ *
+ * This queue's constructor requires a processor function, which accepts a single argument. When items in the queue are
+ * ready for processing, this function is invoked with the item as its argument.
+ *
+ * The processor function can return a promise which resolves when finished.
  */
-export class Queue<F extends TaskFunction = TaskFunction> extends EventEmitter<Events<F>> {
+export class ItemQueue<T = any> extends EventEmitter<Events<T>> {
 
 	/**
 	 * The options for this queue.
 	 */
 	public options: QueueOptions;
 
+	/**
+	 * The processor function for this queue.
+	 */
+	public processor: ItemFunction<T>;
+
 	private _active = false;
 	private _stopping = false;
 	private _numRunningTasks = 0;
 
-	private _tasks: InternalTaskRecord<F>[];
-	private _timeouts: Map<InternalTaskRecord<F>, any>;
+	private _tasks: InternalTaskRecord<T>[];
+	private _timeouts: Map<InternalTaskRecord<T>, any>;
 
 	private _stopPromise?: Promise<void>;
 	private _stopPromiseResolver?: (...args: any[]) => void;
 
 	/**
-	 * Constructs a new `Queue` instance with the given options.
+	 * Constructs a new `ItemQueue` instance with the given options.
 	 *
 	 * @param options
 	 */
-	public constructor(options?: QueueOptions) {
+	public constructor(processor: ItemFunction<T>, options?: QueueOptions) {
 		super();
 
 		this.options = options || {};
+		this.processor = processor;
+
 		this._tasks = [];
 		this._timeouts = new Map();
 	}
@@ -48,14 +61,14 @@ export class Queue<F extends TaskFunction = TaskFunction> extends EventEmitter<E
 	}
 
 	/**
-	 * Adds a task to the queue.
+	 * Adds an item to the queue.
 	 *
-	 * @param task The task function to execute.
+	 * @param item The item to process.
 	 * @param options Custom options for this specific task.
 	 */
-	public push(task: F, options?: TaskOptions) {
+	public push(item: T, options?: TaskOptions) {
 		this._enqueueTask({
-			callable: task,
+			item,
 			options
 		});
 
@@ -63,16 +76,16 @@ export class Queue<F extends TaskFunction = TaskFunction> extends EventEmitter<E
 	}
 
 	/**
-	 * Adds a task to the queue and returns a `Promise` to track it. The promise will resolve once the task is
-	 * complete, or rejects if the task threw an error or timed out.
+	 * Adds an item to the queue and returns a `Promise` to track it. The promise will resolve once the item is done
+	 * processing, or rejects if the processor threw an error or timed out.
 	 *
-	 * @param task The task function to execute.
+	 * @param item The item to process.
 	 * @param options Custom options for this specific task.
 	 */
-	public pushAsync(task: F, options?: TaskOptions): Promise<void> {
+	public pushAsync(item: T, options?: TaskOptions): Promise<void> {
 		return new Promise((resolve, reject) => {
 			this._enqueueTask({
-				callable: task,
+				item,
 				promiseResolve: resolve,
 				promiseReject: reject,
 				options
@@ -152,7 +165,7 @@ export class Queue<F extends TaskFunction = TaskFunction> extends EventEmitter<E
 	 *
 	 * @param task
 	 */
-	private _enqueueTask(task: InternalTaskRecord<F>) {
+	private _enqueueTask(task: InternalTaskRecord<T>) {
 		// If this is an immediate task, add it to the beginning of the queue
 		// The start() method will always check to see if the first task in the queue is an immediate
 		if (task.options?.runImmediately) {
@@ -175,7 +188,7 @@ export class Queue<F extends TaskFunction = TaskFunction> extends EventEmitter<E
 	 *
 	 * @param task
 	 */
-	private _executeTask(task: InternalTaskRecord<F>) {
+	private _executeTask(task: InternalTaskRecord<T>) {
 		this._beforeExecuteTask(task);
 
 		// Internal state tracking
@@ -196,7 +209,7 @@ export class Queue<F extends TaskFunction = TaskFunction> extends EventEmitter<E
 
 		// Execute the task with error handling
 		try {
-			const response = task.callable();
+			const response = this.processor(task.item);
 
 			// Handle promises
 			if (response && typeof response.then === 'function') {
@@ -234,7 +247,7 @@ export class Queue<F extends TaskFunction = TaskFunction> extends EventEmitter<E
 	 *
 	 * @param task
 	 */
-	private _beforeExecuteTask(task: InternalTaskRecord<F>) {
+	private _beforeExecuteTask(task: InternalTaskRecord<T>) {
 		// Mark the task as running
 		this._numRunningTasks++;
 
@@ -245,7 +258,7 @@ export class Queue<F extends TaskFunction = TaskFunction> extends EventEmitter<E
 		}
 
 		// Announce that the task is starting
-		this._emit('taskStarted', task.callable);
+		this._emit('taskStarted', task.item);
 	}
 
 	/**
@@ -253,7 +266,7 @@ export class Queue<F extends TaskFunction = TaskFunction> extends EventEmitter<E
 	 *
 	 * @param task
 	 */
-	private _afterExecuteTask(task: InternalTaskRecord<F>, timeout?: number, error?: any) {
+	private _afterExecuteTask(task: InternalTaskRecord<T>, timeout?: number, error?: any) {
 		// Remove the task as running
 		this._numRunningTasks--;
 
@@ -265,7 +278,7 @@ export class Queue<F extends TaskFunction = TaskFunction> extends EventEmitter<E
 
 		// Emit timeout event
 		if (timeout) {
-			this._emit('taskTimedOut', task.callable);
+			this._emit('taskTimedOut', task.item);
 		}
 
 		// Emit error event
@@ -274,12 +287,12 @@ export class Queue<F extends TaskFunction = TaskFunction> extends EventEmitter<E
 				error = new Error(error);
 			}
 
-			this._emit('taskFailed', error, task.callable);
+			this._emit('taskFailed', error, task.item);
 		}
 
 		// Emit completed event
 		else {
-			this._emit('taskCompleted', task.callable);
+			this._emit('taskCompleted', task.item);
 		}
 
 		// Convert timeouts into an error, we'll need this for the next few steps
@@ -288,7 +301,7 @@ export class Queue<F extends TaskFunction = TaskFunction> extends EventEmitter<E
 		}
 
 		// Always emit the finished event
-		this._emit('taskFinished', error, task.callable);
+		this._emit('taskFinished', error, task.item);
 
 		// Invoke the task's resolver
 		if (task.promiseResolve && (!timeout && typeof error === 'undefined')) {
@@ -381,32 +394,32 @@ export class Queue<F extends TaskFunction = TaskFunction> extends EventEmitter<E
 /**
  * The events that the queue can emit.
  */
-type Events<F extends TaskFunction> = {
+type Events<T> = {
 	/**
-	 * Emitted when the queue starts running a task.
+	 * Emitted when the queue starts processing an item.
 	 */
-	taskStarted: [task: F];
+	taskStarted: [item: T];
 
 	/**
-	 * Emitted when a task is completed successfully.
+	 * Emitted after an item finished processing successfully.
 	 */
-	taskCompleted: [task: F];
+	taskCompleted: [item: T];
 
 	/**
-	 * Emitted when a task timed out and was dropped from the queue.
+	 * Emitted when processing an item timed out and it was dropped from the queue.
 	 */
-	taskTimedOut: [task: F];
+	taskTimedOut: [item: T];
 
 	/**
-	 * Emitted when a task threw an error.
+	 * Emitted when a processing an item threw an error.
 	 */
-	taskFailed: [error: Error, task: F];
+	taskFailed: [error: Error, item: T];
 
 	/**
-	 * Emitted when a task has finished. If the task timed out or threw an error, the error will be provided as the
+	 * Emitted when an item has finished. If the task timed out or threw an error, the error will be provided as the
 	 * first parameter.
 	 */
-	taskFinished: [error: Error | undefined, task: F];
+	taskFinished: [error: Error | undefined, item: T];
 
 	/**
 	 * Emitted when the queue is started. If `autoStart` is enabled, this means the queue has started processing new
@@ -426,80 +439,18 @@ type Events<F extends TaskFunction> = {
 };
 
 /**
- * Describes the options to use for a queue instance.
- */
-export interface QueueOptions {
-	/**
-	 * Whether or not the queue should be started automatically when a task is inserted.
-	 *
-	 * If set to false, then you must call `start()` on the queue to start processing tasks. In addition, each time the
-	 * queue stops due to being empty, you will also need to start it manually the next time you add data.
-	 *
-	 * Default: `true`
-	 */
-	autoStart?: boolean;
-
-	/**
-	 * The number of tasks that can run concurrently. If there are more tasks in the queue than this value, then the
-	 * extra tasks will be held until one of the concurrent tasks are completed.
-	 *
-	 * Default: `1`
-	 */
-	maxConcurrentTasks?: number;
-
-	/**
-	 * The default number of milliseconds to wait before tasks time out, or `0` to disable. When a task times out, the
-	 * task's function will continue executing, but the queue will drop the slot reservation and start the next
-	 * available task.
-	 *
-	 * Default: `0`
-	 */
-	defaultTimeout?: number;
-
-	/**
-	 * When a task completes, this option changes how the next task is started.
-	 *
-	 * If true, the next task will be scheduled to run after a few milliseconds with `setTimeout`. This will allow
-	 * promises to settle and other code in the application to execute if the queue has synchronous, blocking tasks.
-	 *
-	 * If false, the next task will be invoked immediately. As a result, task completion promises might resolve
-	 * after new tasks start, and compute-heavy tasks can slow the application overall.
-	 *
-	 * Default: `true`
-	 */
-	useAsyncTicking?: boolean;
-}
-
-/**
  * Describes a function with no parameters that returns a promise.
  */
-export type TaskFunction<T = any> = () => Promise<T> | T;
-
-/**
- * Describes options that can be set per task.
- */
-export interface TaskOptions {
-	/**
-	 * The number of milliseconds to wait before the task times out, or `0` to disable.
-	 * Defaults to the value of `defaultTimeout` in the queue instance.
-	 */
-	timeout?: number;
-
-	/**
-	 * Whether or not this task should execute immediately, even if the number of active tasks is equal to or exceeding
-	 * the value of `maxConcurrentTasks`.
-	 */
-	runImmediately?: boolean;
-}
+type ItemFunction<T> = (item: T) => any;
 
 /**
  * Describes an internal, queued task.
  */
-interface InternalTaskRecord<F extends TaskFunction> {
+interface InternalTaskRecord<T> {
 	/**
-	 * The task function to execute.
+	 * The item to process.
 	 */
-	callable: F;
+	item: T;
 
 	/**
 	 * The custom options for this task, if provided.
