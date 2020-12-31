@@ -2,8 +2,8 @@
 
 This package offers two different types of queues, an `ItemQueue` and a `FunctionQueue`, for running tasks with concurrency and timeouts. It's my personal replacement to the `queue` package and offers some cool features:
 
-- Working timeouts
-- New: Task groups
+- ⌚ Working timeouts
+- ✨ [Task groups](https://github.com/baileyherbert/queue/blob/master/docs/groups.md)
 
 # Getting started
 
@@ -63,6 +63,4 @@ group.push('Do even more work!');
 await group.getCompletionPromise();
 ```
 
-# API
-
-[**📚 Click here to view the documentation!**](https://github.com/baileyherbert/queue/blob/master/docs/_index.md)
+[**📚 Click here for task group documentation.**](https://github.com/baileyherbert/queue/blob/master/docs/groups.md)
