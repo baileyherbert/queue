@@ -68,6 +68,20 @@ export class FunctionQueue<F extends FunctionTask = FunctionTask> extends EventE
 	}
 
 	/**
+	 * Returns a `Promise` which resolves once all tasks in the queue are completed. If the queue does not have any
+	 * tasks, the promise will be resolved immediately.
+	 */
+	public getCompletionPromise() {
+		if (this.length === 0) {
+			return Promise.resolve();
+		}
+
+		return new Promise<void>(resolve => {
+			this.once('finished', resolve);
+		});
+	}
+
+	/**
 	 * Adds a task to the queue.
 	 *
 	 * @param task The task function to execute.

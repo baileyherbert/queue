@@ -101,6 +101,11 @@ new Queue({
 **Returns:** [`QueueGroup<T>`](groups.md)\
 **Description:** Creates and returns a new task group which uses this queue as its underlying processor. You can use task groups to work with and track separate groups of items while using the same underlying queue to process them.
 
+### `Queue.getCompletionPromise()`
+
+**Returns:** `Promise<void>`\
+**Description:** Returns a `Promise` which resolves once all tasks in the queue are completed. If the queue does not have any tasks, the promise will be resolved immediately.
+
 ## Events
 
 The following snippet is a list of events and their typed parameters.

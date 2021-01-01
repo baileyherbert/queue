@@ -75,6 +75,20 @@ export class ItemQueue<T = any> extends EventEmitter<Events<T>> {
 	}
 
 	/**
+	 * Returns a `Promise` which resolves once all tasks in the queue are completed. If the queue does not have any
+	 * tasks, the promise will be resolved immediately.
+	 */
+	public getCompletionPromise() {
+		if (this.length === 0) {
+			return Promise.resolve();
+		}
+
+		return new Promise<void>(resolve => {
+			this.once('finished', resolve);
+		});
+	}
+
+	/**
 	 * Adds an item to the queue.
 	 *
 	 * @param item The item to process.
