@@ -112,6 +112,11 @@ The following snippet is a list of events and their typed parameters.
 
 ```ts
 interface Events {
+	/**
+	 * Emitted when a task is added to the queue.
+	 */
+    taskAdded: [task: F];
+
     /**
      * Emitted when the queue starts running a task.
      */

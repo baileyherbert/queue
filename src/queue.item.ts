@@ -205,6 +205,9 @@ export class ItemQueue<T = any> extends EventEmitter<Events<T>> {
 			this._tasks.push(task);
 		}
 
+		// Emit added event
+		this._emit('taskAdded', task.item);
+
 		// Start the queue automatically
 		if (this._autoStart) {
 			this.start();
@@ -423,6 +426,11 @@ export class ItemQueue<T = any> extends EventEmitter<Events<T>> {
  * The events that the queue can emit.
  */
 type Events<T> = {
+	/**
+	 * Emitted when an item is added to the queue.
+	 */
+	taskAdded: [item: T];
+
 	/**
 	 * Emitted when the queue starts processing an item.
 	 */

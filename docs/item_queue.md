@@ -123,6 +123,11 @@ The following snippet is a list of events and their typed parameters.
 
 ```ts
 interface Events {
+	/**
+	 * Emitted when an item is added to the queue.
+	 */
+    taskAdded: [item: T];
+
     /**
      * Emitted when the queue starts running a task.
      */

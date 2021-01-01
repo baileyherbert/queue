@@ -198,6 +198,9 @@ export class FunctionQueue<F extends FunctionTask = FunctionTask> extends EventE
 			this._tasks.push(task);
 		}
 
+		// Emit added event
+		this._emit('taskAdded', task.callable);
+
 		// Start the queue automatically
 		if (this._autoStart) {
 			this.start();
@@ -416,6 +419,11 @@ export class FunctionQueue<F extends FunctionTask = FunctionTask> extends EventE
  * The events that the queue can emit.
  */
 type Events<F extends FunctionTask> = {
+	/**
+	 * Emitted when a task is added to the queue.
+	 */
+	taskAdded: [task: F];
+
 	/**
 	 * Emitted when the queue starts running a task.
 	 */
