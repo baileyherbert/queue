@@ -1,7 +1,7 @@
 {
 	"name": "@baileyherbert/queue",
 	"description": "Modern, promise-based queue.",
-	"version": "2.1.0",
+	"version": "2.1.1",
 	"license": "MIT",
 	"author": "Bailey Herbert <hello@bailey.sh> (https://bailey.sh)",
 	"repository": "github:baileyherbert/queue",
