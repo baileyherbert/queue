@@ -92,8 +92,6 @@ export class FunctionQueue<F extends FunctionTask = FunctionTask> extends EventE
 			callable: task,
 			options
 		});
-
-		this.start();
 	}
 
 	/**

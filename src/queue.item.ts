@@ -99,8 +99,6 @@ export class ItemQueue<T = any> extends EventEmitter<Events<T>> {
 			item,
 			options
 		});
-
-		this.start();
 	}
 
 	/**
