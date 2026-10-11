@@ -5,6 +5,9 @@
 	"license": "MIT",
 	"author": "Bailey Herbert <hello@bailey.sh> (https://bailey.sh)",
 	"repository": "github:baileyherbert/queue",
+	"engines": {
+		"node": ">=22"
+	},
 	"main": "./dist/index.js",
 	"typings": "./dist/index.d.ts",
 	"scripts": {
