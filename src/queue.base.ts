@@ -1,5 +1,6 @@
 import { QueueOptions, TaskOptions } from './common';
 import { EventEmitter } from './events';
+import { FifoQueue } from './fifo';
 import { QueueGroup, TaskEventName } from './queue.group';
 import { scheduleTick } from './tick';
 
@@ -24,7 +25,8 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	private _needsFill = false;
 	private _isTickScheduled = false;
 
-	private _tasks: InternalTaskRecord<T>[];
+	private _tasks: FifoQueue<InternalTaskRecord<T>>;
+	private _immediateTasks: FifoQueue<InternalTaskRecord<T>>;
 	private _timeouts: Map<InternalTaskRecord<T>, any>;
 
 	private _stopPromise?: Promise<void>;
@@ -39,7 +41,8 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 		super();
 
 		this.options = options || {};
-		this._tasks = [];
+		this._tasks = new FifoQueue();
+		this._immediateTasks = new FifoQueue();
 		this._timeouts = new Map();
 	}
 
@@ -54,7 +57,7 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	 * The total number of active and pending tasks in the queue.
 	 */
 	public get length(): number {
-		return this._tasks.length + this._numRunningTasks;
+		return this._numPendingTasks + this._numRunningTasks;
 	}
 
 	/**
@@ -133,7 +136,7 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	 */
 	public startAsync() {
 		// Nothing to do, resolve immediately
-		if (!this._active && this._tasks.length === 0) {
+		if (!this._active && this._numPendingTasks === 0) {
 			return Promise.resolve();
 		}
 
@@ -188,16 +191,10 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	 * @param task
 	 */
 	public _enqueueTask(task: InternalTaskRecord<T>) {
-		// If this is an immediate task, add it to the beginning of the queue, after any other pending immediate tasks
-		// The _fill() method will always check to see if the first task in the queue is an immediate
+		// If this is an immediate task, add it to the immediate queue
+		// The _fill() method will always start immediate tasks before other tasks
 		if (task.options?.runImmediately) {
-			let index = 0;
-
-			while (index < this._tasks.length && this._tasks[index].options?.runImmediately) {
-				index++;
-			}
-
-			this._tasks.splice(index, 0, task);
+			this._immediateTasks.push(task);
 		}
 
 		// Otherwise, add the task to the end of the queue
@@ -215,8 +212,8 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	}
 
 	/**
-	 * Runs pending tasks until all free slots are filled. Tasks configured to `runImmediately` at the front of the
-	 * queue are started even when there are no free slots.
+	 * Runs pending tasks until all free slots are filled. Tasks configured to `runImmediately` are started first, and
+	 * are started even when there are no free slots.
 	 *
 	 * If the queue is stopping, no tasks are started. Instead, the stop is completed if there are no running tasks
 	 * left to wait for, which happens when `stop()` is called in between ticks.
@@ -246,16 +243,17 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 				const freeSlots = this._maxConcurrentTasks - this._numRunningTasks;
 				let numStarted = 0;
 
-				while (this._tasks.length > 0) {
+				while (this._numPendingTasks > 0) {
 					// Also check the live count, since tasks can push and start other tasks from within this loop
 					const hasFreeSlot = numStarted < freeSlots && this._numRunningTasks < this._maxConcurrentTasks;
+					const hasImmediateTask = this._immediateTasks.length > 0;
 
-					if (!hasFreeSlot && !this._tasks[0].options?.runImmediately) {
+					if (!hasFreeSlot && !hasImmediateTask) {
 						break;
 					}
 
 					numStarted++;
-					this._executeTask(this._tasks.shift()!);
+					this._executeTask((hasImmediateTask ? this._immediateTasks : this._tasks).shift()!);
 				}
 			}
 
@@ -501,6 +499,13 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 		if (resolver) {
 			resolver();
 		}
+	}
+
+	/**
+	 * The number of tasks waiting to be started.
+	 */
+	private get _numPendingTasks() {
+		return this._immediateTasks.length + this._tasks.length;
 	}
 
 	/**

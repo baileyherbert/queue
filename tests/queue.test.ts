@@ -235,6 +235,21 @@ describe('queue (via FunctionQueue)', () => {
 			expect(queue.length).toBe(0);
 		});
 
+		it('drains a large backlog of tasks in linear time', () => {
+			const queue = new FunctionQueue({ autoStart: false, useAsyncTicking: false });
+			const start = Date.now();
+
+			// Removing tasks with Array.prototype.shift() is quadratic, which takes several seconds at this size
+			for (let i = 0; i < 200000; i++) {
+				queue.push(() => {});
+			}
+
+			queue.start();
+
+			expect(queue.length).toBe(0);
+			expect(Date.now() - start).toBeLessThan(1000);
+		});
+
 		it('runs a long chain of synchronous tasks that push the next task with useAsyncTicking: false', () => {
 			const queue = new FunctionQueue({ useAsyncTicking: false });
 			const failed = vi.fn();
