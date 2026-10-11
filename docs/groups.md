@@ -13,10 +13,10 @@ Groups offer a `getCompletionPromise()` method which resolves once all tasks in 
 const group1 = queue.createGroup();
 const group2 = queue.createGroup();
 
-queue.on('taskFinished', item => console.log('Queue:', item));
+queue.on('taskFinished', (error, item) => console.log('Queue:', item));
 
-group1.on('taskFinished', item => console.log('Group1:', item));
-group2.on('taskFinished', item => console.log('Group2:', item));
+group1.on('taskFinished', (error, item) => console.log('Group1:', item));
+group2.on('taskFinished', (error, item) => console.log('Group2:', item));
 
 group1.push('This was added to group1.');
 group2.push('This was added to group2.');

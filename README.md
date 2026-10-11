@@ -54,7 +54,7 @@ queue.push('Do some more work!');
 Once you create a queue, you can spawn a task group using `queue.createGroup()`. This returns a wrapper around the queue that tracks a specific set of tasks. It offers the same methods and events as the queue itself, but only emits events for tasks added through the group. The original queue is still used to process the tasks.
 
 ```ts
-const group = task.createGroup();
+const group = queue.createGroup();
 group.push('Do even more work!');
 
 // The getCompletionPromise() returns a promise which resolves
