@@ -186,10 +186,16 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	 * @param task
 	 */
 	public _enqueueTask(task: InternalTaskRecord<T>) {
-		// If this is an immediate task, add it to the beginning of the queue
+		// If this is an immediate task, add it to the beginning of the queue, after any other pending immediate tasks
 		// The _fill() method will always check to see if the first task in the queue is an immediate
 		if (task.options?.runImmediately) {
-			this._tasks.unshift(task);
+			let index = 0;
+
+			while (index < this._tasks.length && this._tasks[index].options?.runImmediately) {
+				index++;
+			}
+
+			this._tasks.splice(index, 0, task);
 		}
 
 		// Otherwise, add the task to the end of the queue

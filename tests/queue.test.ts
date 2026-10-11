@@ -300,6 +300,44 @@ describe('queue (via FunctionQueue)', () => {
 			expect(order[0]).toBe('immediate');
 			expect(order).toHaveLength(3);
 		});
+
+		it('runs multiple runImmediately tasks in the order they were pushed', async () => {
+			const queue = new FunctionQueue({ autoStart: false });
+			const order: string[] = [];
+
+			queue.push(() => order.push('a'));
+			queue.push(() => order.push('immediate 1'), { runImmediately: true });
+			queue.push(() => order.push('immediate 2'), { runImmediately: true });
+			queue.push(() => order.push('b'));
+			queue.push(() => order.push('immediate 3'), { runImmediately: true });
+
+			const result = track(queue.startAsync());
+			await flush();
+
+			expect(result.status).toBe('fulfilled');
+			expect(order).toEqual(['immediate 1', 'immediate 2', 'immediate 3', 'a', 'b']);
+		});
+
+		it('runs runImmediately tasks pushed while stopping in the order they were pushed', async () => {
+			const queue = new FunctionQueue();
+			const first = controlled();
+			const order: string[] = [];
+
+			queue.push(first.task);
+			queue.push(() => order.push('pending'));
+			queue.stop();
+			queue.push(() => order.push('immediate 1'), { runImmediately: true });
+			queue.push(() => order.push('immediate 2'), { runImmediately: true });
+
+			first.finish();
+			await flush();
+			expect(order).toEqual([]);
+
+			queue.start();
+			await flush();
+
+			expect(order).toEqual(['immediate 1', 'immediate 2', 'pending']);
+		});
 	});
 
 	describe('properties', () => {
