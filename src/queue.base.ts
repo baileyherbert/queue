@@ -123,9 +123,15 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	}
 
 	/**
-	 * Starts the queue and returns a `Promise` which resolves once it has stopped.
+	 * Starts the queue and returns a `Promise` which resolves once it has stopped. If the queue isn't running and has
+	 * no tasks to process, the promise resolves immediately without emitting any events.
 	 */
 	public startAsync() {
+		// Nothing to do, resolve immediately
+		if (!this._active && this._tasks.length === 0) {
+			return Promise.resolve();
+		}
+
 		// Get the promise before starting, in case the queue finishes synchronously
 		const promise = this._getStopPromise();
 		this.start();

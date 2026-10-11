@@ -507,6 +507,39 @@ describe('queue (via FunctionQueue)', () => {
 			expect(result.status).toBe('fulfilled');
 		});
 
+		it('does not emit events when there are no tasks to process', async () => {
+			const queue = new FunctionQueue();
+			const listener = vi.fn();
+
+			for (const event of ['started', 'stopped', 'finished'] as const) {
+				queue.on(event, listener);
+			}
+
+			const result = track(queue.startAsync());
+			await flush();
+
+			expect(result.status).toBe('fulfilled');
+			expect(listener).not.toHaveBeenCalled();
+			expect(queue.active).toBe(false);
+		});
+
+		it('still processes tasks pushed after resolving with no tasks', async () => {
+			const queue = new FunctionQueue({ autoStart: false });
+			const task = vi.fn();
+
+			const emptyResult = track(queue.startAsync());
+			await flush();
+
+			expect(emptyResult.status).toBe('fulfilled');
+
+			queue.push(task);
+			const result = track(queue.startAsync());
+			await flush();
+
+			expect(task).toHaveBeenCalledTimes(1);
+			expect(result.status).toBe('fulfilled');
+		});
+
 		it('starts the queue again after a previous call finished synchronously', async () => {
 			const queue = new FunctionQueue({ autoStart: false });
 			const first = vi.fn();
