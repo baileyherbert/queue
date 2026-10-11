@@ -76,6 +76,16 @@ export class EventEmitter<S extends EventEmitterSchema = EventEmitterSchema> {
 	}
 
 	/**
+	 * Returns whether there are any listeners for an event. This can be used to skip building the arguments for an
+	 * event that nothing is listening to.
+	 *
+	 * @param event
+	 */
+	protected _hasListeners(event: Key<S>): boolean {
+		return !!(this._onListeners.get(event)?.size || this._onceListeners.get(event)?.size);
+	}
+
+	/**
 	 * Emits an event to listeners.
 	 *
 	 * Errors thrown by listeners don't interrupt the emitter or the remaining listeners. Instead, they are rethrown
@@ -85,11 +95,16 @@ export class EventEmitter<S extends EventEmitterSchema = EventEmitterSchema> {
 	 * @param args
 	 */
 	protected _emit<E extends Key<S>>(event: E, ...args: S[E]) {
+		const onListeners = this._onListeners.get(event);
+		const onceListeners = this._onceListeners.get(event);
+
+		// Skip the work below when nothing is listening, since queues emit several events for every task
+		if (!onListeners?.size && !onceListeners?.size) {
+			return;
+		}
+
 		// Aggregate all matching callbacks
-		const callbacks = [
-			...(this._onListeners.has(event) ? this._onListeners.get(event)! : []),
-			...(this._onceListeners.has(event) ? this._onceListeners.get(event)! : [])
-		];
+		const callbacks = [...(onListeners ?? []), ...(onceListeners ?? [])];
 
 		// Remove once listeners
 		this._onceListeners.delete(event);

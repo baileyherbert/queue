@@ -465,7 +465,11 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	 * @param args The arguments to emit the event with.
 	 */
 	private _emitTaskEvent<E extends TaskEventName>(task: InternalTaskRecord<T>, event: E, ...args: QueueEvents<T>[E]) {
-		this._emit(event, ...args);
+		// Checking for listeners first avoids spreading the arguments again, since this runs several times per task
+		if (this._hasListeners(event)) {
+			this._emit(event, ...args);
+		}
+
 		task.group?._receiveTaskEvent(task, event, ...args);
 	}
 
