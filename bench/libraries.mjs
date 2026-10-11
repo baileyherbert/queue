@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module';
 import asyncLib from 'async';
 import Bottleneck from 'bottleneck';
 import fastq from 'fastq';
@@ -6,9 +5,7 @@ import pLimit from 'p-limit';
 import PQueue from 'p-queue';
 import Queue from 'queue';
 import throat from 'throat';
-
-const require = createRequire(import.meta.url);
-const { FunctionQueue } = require('../dist/index.js');
+import { FunctionQueue } from '../dist/index.js';
 
 /**
  * Creates a synchronous task, which increments the counter.

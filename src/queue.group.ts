@@ -1,6 +1,6 @@
-import { TaskOptions } from './common';
-import { EventEmitter } from './events';
-import type { BaseQueue, InternalTaskRecord } from './queue.base';
+import { TaskOptions } from './common.js';
+import { EventEmitter } from './events.js';
+import type { BaseQueue, InternalTaskRecord } from './queue.base.js';
 
 /**
  * This class is used to help manage separate groups of tasks in the same queue.

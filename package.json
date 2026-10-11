@@ -8,9 +8,19 @@
 	"engines": {
 		"node": ">=22"
 	},
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
 	"main": "./dist/index.js",
-	"typings": "./dist/index.d.ts",
+	"types": "./dist/index.d.ts",
+	"sideEffects": false,
 	"scripts": {
+		"prebuild": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
 		"build": "tsc",
 		"dev": "vitest",
 		"test": "vitest run",

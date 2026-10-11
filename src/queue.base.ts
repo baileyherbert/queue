@@ -1,9 +1,9 @@
-import { QueueOptions, TaskOptions } from './common';
-import { EventEmitter } from './events';
-import { FifoQueue } from './fifo';
-import { QueueGroup, TaskEventName } from './queue.group';
-import { getDefaultYieldInterval, scheduleTick } from './tick';
-import { YieldClock } from './yield';
+import { QueueOptions, TaskOptions } from './common.js';
+import { EventEmitter } from './events.js';
+import { FifoQueue } from './fifo.js';
+import { QueueGroup, TaskEventName } from './queue.group.js';
+import { getDefaultYieldInterval, scheduleTick } from './tick.js';
+import { YieldClock } from './yield.js';
 
 /**
  * The shared implementation behind `FunctionQueue` and `ItemQueue`, which handles concurrency, timeouts, events, and

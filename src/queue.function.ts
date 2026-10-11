@@ -1,5 +1,5 @@
-import { QueueOptions } from './common';
-import { BaseQueue } from './queue.base';
+import { QueueOptions } from './common.js';
+import { BaseQueue } from './queue.base.js';
 
 /**
  * A function queue for executing functions with a concurrency limit and timeouts.
