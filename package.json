@@ -10,9 +10,8 @@
 	"scripts": {
 		"build": "tsc"
 	},
-	"dependencies": {},
 	"devDependencies": {
-		"typescript": "^4.1.2"
+		"typescript": "^7.0.2"
 	},
 	"files": [
 		"dist"
