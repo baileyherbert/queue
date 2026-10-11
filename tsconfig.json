@@ -5,6 +5,7 @@
 		"lib": ["es2016", "dom"],
 		"module": "commonjs",
 		"declaration": true,
+		"stripInternal": true,
 		"declarationMap": false,
 		"newLine": "lf",
 		"sourceMap": false,

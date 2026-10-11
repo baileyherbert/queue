@@ -202,6 +202,19 @@ describe('QueueGroup (via FunctionQueue)', () => {
 			expect(second.task).toHaveBeenCalledTimes(1);
 			expect(listener).not.toHaveBeenCalled();
 		});
+
+		it('still settles promises from pushAsync() after being destroyed', async () => {
+			const group = new FunctionQueue().createGroup();
+			const { task, finish } = controlled();
+
+			const result = track(group.pushAsync(task));
+			group.destroy();
+
+			finish();
+			await flush();
+
+			expect(result.status).toBe('fulfilled');
+		});
 	});
 
 	describe('getCompletionPromise()', () => {
@@ -237,6 +250,30 @@ describe('QueueGroup (via FunctionQueue)', () => {
 			await flush();
 			expect(result.status).toBe('fulfilled');
 			expect(queue.length).toBe(1);
+		});
+
+		it('waits for every copy of an item that was pushed more than once', async () => {
+			const signals = [deferred(), deferred()];
+			let numCalls = 0;
+			const queue = new ItemQueue<string>(() => signals[numCalls++].promise, { autoStart: false });
+			const group = queue.createGroup();
+
+			group.push('item');
+			group.push('item');
+			const result = track(group.getCompletionPromise());
+			queue.start();
+
+			signals[0].resolve();
+			await flush();
+
+			expect(result.status).toBe('pending');
+			expect(group.length).toBe(1);
+
+			signals[1].resolve();
+			await flush();
+
+			expect(result.status).toBe('fulfilled');
+			expect(group.length).toBe(0);
 		});
 	});
 
@@ -357,6 +394,52 @@ describe('QueueGroup (via FunctionQueue)', () => {
 				'Group1: This was added to group1.',
 				'Queue: This was added to group2.',
 				'Group2: This was added to group2.'
+			]);
+		});
+
+		it('does not emit events for the same item pushed through another group', async () => {
+			const queue = new ItemQueue<string>(() => {}, { autoStart: false });
+			const group1 = queue.createGroup();
+			const group2 = queue.createGroup();
+			const finished1 = vi.fn();
+			const finished2 = vi.fn();
+			group1.on('taskFinished', finished1);
+			group2.on('taskFinished', finished2);
+
+			group1.push('item');
+			group2.push('item');
+
+			// Only the copy pushed through group1 runs synchronously, the other runs on the next tick
+			queue.start();
+
+			expect(finished1).toHaveBeenCalledExactlyOnceWith(undefined, 'item');
+			expect(finished2).not.toHaveBeenCalled();
+
+			await flush();
+
+			expect(finished1).toHaveBeenCalledTimes(1);
+			expect(finished2).toHaveBeenCalledExactlyOnceWith(undefined, 'item');
+		});
+
+		it('invokes queue listeners before group listeners', async () => {
+			const queue = new FunctionQueue();
+			const group = queue.createGroup();
+			const order: string[] = [];
+
+			for (const event of ['taskStarted', 'taskCompleted', 'taskFinished'] as const) {
+				group.on(event, () => order.push('group ' + event));
+				queue.on(event, () => order.push('queue ' + event));
+			}
+
+			await group.pushAsync(() => {});
+
+			expect(order).toEqual([
+				'queue taskStarted',
+				'group taskStarted',
+				'queue taskCompleted',
+				'group taskCompleted',
+				'queue taskFinished',
+				'group taskFinished'
 			]);
 		});
 	});

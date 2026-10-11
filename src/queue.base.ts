@@ -1,6 +1,6 @@
 import { QueueOptions, TaskOptions } from './common';
 import { EventEmitter } from './events';
-import { QueueGroup } from './queue.group';
+import { QueueGroup, TaskEventName } from './queue.group';
 
 /**
  * The shared implementation behind `FunctionQueue` and `ItemQueue`, which handles concurrency, timeouts, events, and
@@ -177,9 +177,12 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	 * Enqueues a task and starts the queue if necessary. If the given task configured to `runImmediately` then it will
 	 * be executed here as well.
 	 *
+	 * This is used by `QueueGroup` to enqueue tasks that belong to the group.
+	 *
+	 * @internal
 	 * @param task
 	 */
-	private _enqueueTask(task: InternalTaskRecord<T>) {
+	public _enqueueTask(task: InternalTaskRecord<T>) {
 		// If this is an immediate task, add it to the beginning of the queue
 		// The _fill() method will always check to see if the first task in the queue is an immediate
 		if (task.options?.runImmediately) {
@@ -322,7 +325,7 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 		}
 
 		// Announce that the task is starting
-		this._emit('taskStarted', task.item);
+		this._emitTaskEvent(task, 'taskStarted', task.item);
 	}
 
 	/**
@@ -342,7 +345,7 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 
 		// Emit timeout event
 		if (timeout) {
-			this._emit('taskTimedOut', task.item);
+			this._emitTaskEvent(task, 'taskTimedOut', task.item);
 		}
 
 		// Emit error event
@@ -351,12 +354,12 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 				error = new Error(error);
 			}
 
-			this._emit('taskFailed', error, task.item);
+			this._emitTaskEvent(task, 'taskFailed', error, task.item);
 		}
 
 		// Emit completed event
 		else {
-			this._emit('taskCompleted', task.item);
+			this._emitTaskEvent(task, 'taskCompleted', task.item);
 		}
 
 		// Convert timeouts into an error, we'll need this for the next few steps
@@ -365,7 +368,7 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 		}
 
 		// Always emit the finished event
-		this._emit('taskFinished', error, task.item);
+		this._emitTaskEvent(task, 'taskFinished', error, task.item);
 
 		// Invoke the task's resolver
 		if (task.promiseResolve && (!timeout && typeof error === 'undefined')) {
@@ -398,6 +401,19 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 				this._fill();
 			}
 		}
+	}
+
+	/**
+	 * Emits an event for a task, and then forwards it to the task's group if it has one. Emitting from the queue first
+	 * means that queue listeners are always invoked before group listeners.
+	 *
+	 * @param task The task the event belongs to.
+	 * @param event The name of the event.
+	 * @param args The arguments to emit the event with.
+	 */
+	private _emitTaskEvent<E extends TaskEventName>(task: InternalTaskRecord<T>, event: E, ...args: QueueEvents<T>[E]) {
+		this._emit(event, ...args);
+		task.group?._receiveTaskEvent(task, event, ...args);
 	}
 
 	/**
@@ -516,8 +532,10 @@ type QueueEvents<T> = {
 
 /**
  * Describes an internal, queued task.
+ *
+ * @internal
  */
-interface InternalTaskRecord<T> {
+export interface InternalTaskRecord<T> {
 	/**
 	 * The value that was pushed to the queue.
 	 */
@@ -527,6 +545,11 @@ interface InternalTaskRecord<T> {
 	 * The custom options for this task, if provided.
 	 */
 	options?: TaskOptions;
+
+	/**
+	 * The group that this task was pushed through, if applicable.
+	 */
+	group?: QueueGroup<T>;
 
 	/**
 	 * The resolve function for the task's tracking promise, if applicable.

@@ -1,6 +1,6 @@
 import { TaskOptions } from './common';
 import { EventEmitter } from './events';
-import type { BaseQueue } from './queue.base';
+import type { BaseQueue, InternalTaskRecord } from './queue.base';
 
 /**
  * This class is used to help manage separate groups of tasks in the same queue.
@@ -12,10 +12,8 @@ export class QueueGroup<T> extends EventEmitter<Events<T>> {
 	private _queue: BaseQueue<T>;
 
 	private _active = true;
-	private _activeTasks: Set<T>;
-	private _pendingTasks: Set<T>;
-
-	private _listeners: Map<string, Function>;
+	private _activeTasks: Set<InternalTaskRecord<T>>;
+	private _pendingTasks: Set<InternalTaskRecord<T>>;
 
 	/**
 	 * Constructs a new group for the given queue. Prefer `queue.createGroup()` over calling this directly.
@@ -28,9 +26,6 @@ export class QueueGroup<T> extends EventEmitter<Events<T>> {
 		this._queue = queue;
 		this._activeTasks = new Set();
 		this._pendingTasks = new Set();
-		this._listeners = new Map();
-
-		this._attachListeners();
 	}
 
 	/**
@@ -48,10 +43,10 @@ export class QueueGroup<T> extends EventEmitter<Events<T>> {
 	}
 
 	/**
-	 * Destroys the group, which effectively removes queue listeners.
+	 * Destroys the group. Its pending and active tasks will still be executed by the queue, but the group will no
+	 * longer emit events for them.
 	 */
 	public destroy() {
-		this._detachListeners();
 		this._active = false;
 	}
 
@@ -62,8 +57,11 @@ export class QueueGroup<T> extends EventEmitter<Events<T>> {
 	 * @param options Custom options for this specific task.
 	 */
 	public push(item: T, options?: TaskOptions) {
-		this._pendingTasks.add(item);
-		this._queue.push(item, options);
+		this._enqueueTask({
+			item,
+			options,
+			group: this
+		});
 	}
 
 	/**
@@ -74,8 +72,15 @@ export class QueueGroup<T> extends EventEmitter<Events<T>> {
 	 * @param options Custom options for this specific task.
 	 */
 	public pushAsync(item: T, options?: TaskOptions): Promise<void> {
-		this._pendingTasks.add(item);
-		return this._queue.pushAsync(item, options);
+		return new Promise((resolve, reject) => {
+			this._enqueueTask({
+				item,
+				options,
+				group: this,
+				promiseResolve: resolve,
+				promiseReject: reject
+			});
+		});
 	}
 
 	/**
@@ -93,72 +98,58 @@ export class QueueGroup<T> extends EventEmitter<Events<T>> {
 	}
 
 	/**
-	 * Attaches listeners to the queue and stores them locally so they can be detached later.
+	 * Receives an event from the queue for one of this group's tasks, updates the group's state, and emits the event
+	 * from the group as well.
+	 *
+	 * @internal
+	 * @param task The task the event belongs to.
+	 * @param event The name of the event.
+	 * @param args The arguments the queue emitted the event with.
 	 */
-	private _attachListeners() {
-		const taskStarted = (item: any) => {
-			if (this._pendingTasks.has(item)) {
-				this._pendingTasks.delete(item);
-				this._activeTasks.add(item);
-				this._emit('taskStarted', item);
-			}
-		};
-
-		const taskCompleted = (item: any) => {
-			if (this._activeTasks.has(item)) {
-				this._emit('taskCompleted', item);
-			}
-		};
-
-		const taskFailed = (error: Error, item: any) => {
-			if (this._activeTasks.has(item)) {
-				this._emit('taskFailed', error, item);
-			}
-		};
-
-		const taskTimedOut = (item: any) => {
-			if (this._activeTasks.has(item)) {
-				this._emit('taskTimedOut', item);
-			}
-		};
-
-		const taskFinished = (error: Error | undefined, item: any) => {
-			if (this._activeTasks.has(item)) {
-				this._activeTasks.delete(item);
-				this._emit('taskFinished', error, item);
-
-				if (this.length === 0) {
-					this._emit('finished');
-				}
-			}
+	public _receiveTaskEvent<E extends TaskEventName>(task: InternalTaskRecord<T>, event: E, ...args: Events<T>[E]) {
+		// Destroyed groups no longer track their tasks or emit events
+		if (!this._active) {
+			return;
 		}
 
-		const attach: Function = this._queue.on.bind(this._queue);
-		attach('taskStarted', taskStarted);
-		attach('taskCompleted', taskCompleted);
-		attach('taskFailed', taskFailed);
-		attach('taskTimedOut', taskTimedOut)
-		attach('taskFinished', taskFinished);
+		// Move started tasks from pending to active
+		if (event === 'taskStarted') {
+			this._pendingTasks.delete(task);
+			this._activeTasks.add(task);
+		}
 
-		this._listeners.set('taskStarted', taskStarted);
-		this._listeners.set('taskCompleted', taskCompleted);
-		this._listeners.set('taskFailed', taskFailed);
-		this._listeners.set('taskTimedOut', taskTimedOut);
-		this._listeners.set('taskFinished', taskFinished);
+		// Remove finished tasks
+		else if (event === 'taskFinished') {
+			this._activeTasks.delete(task);
+		}
+
+		this._emit(event, ...args);
+
+		// Emit the finished event once the group has no tasks left
+		if (event === 'taskFinished' && this.length === 0) {
+			this._emit('finished');
+		}
 	}
 
 	/**
-	 * Removes listeners from the queue.
+	 * Tracks a task as pending in this group and sends it to the queue.
+	 *
+	 * @param task
 	 */
-	private _detachListeners() {
-		for (const [event, callback] of this._listeners) {
-			const detach: Function = this._queue.removeListener.bind(this._queue);
-			detach(event, callback);
-		}
+	private _enqueueTask(task: InternalTaskRecord<T>) {
+		// Add the task before enqueueing it, since the queue might start it immediately
+		this._pendingTasks.add(task);
+		this._queue._enqueueTask(task);
 	}
 
 }
 
+/**
+ * The names of the task events that queues forward to groups.
+ *
+ * @internal
+ */
+export type TaskEventName = 'taskStarted' | 'taskCompleted' | 'taskTimedOut' | 'taskFailed' | 'taskFinished';
 
 /**
  * The events that the queue can emit.
