@@ -28,10 +28,11 @@ new Queue({
     // Number of milliseconds to wait for tasks (0 to disable)
     defaultTimeout: 0,
 
-    // Run tasks internally with a small delay
-    // This helps your app run smoothly with compute-heavy tasks
-    // It also makes promises and events work in reliable orders
-    useAsyncTicking: true
+    // Milliseconds to run tasks back-to-back before yielding to the event loop
+    // Yielding lets promises settle and keeps your app responsive
+    // 0 yields after every task, and false never yields
+    // Defaults to 1 in Node and Bun, and 5 in browsers and Deno
+    yieldInterval: 1
 });
 ```
 

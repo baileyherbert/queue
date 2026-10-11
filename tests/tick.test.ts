@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { scheduleTick } from '../src/tick';
+import { getDefaultYieldInterval, scheduleTick } from '../src/tick';
 
 afterEach(() => {
 	vi.unstubAllGlobals();
@@ -57,5 +57,17 @@ describe('scheduleTick()', () => {
 		});
 
 		expect(order).toEqual(['promise', 'tick']);
+	});
+});
+
+describe('getDefaultYieldInterval()', () => {
+	it('returns 1 when setImmediate is available', () => {
+		expect(getDefaultYieldInterval()).toBe(1);
+	});
+
+	it('returns 5 when setImmediate is unavailable', () => {
+		vi.stubGlobal('setImmediate', undefined);
+
+		expect(getDefaultYieldInterval()).toBe(5);
 	});
 });

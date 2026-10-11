@@ -8,6 +8,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	vi.useRealTimers();
+	vi.restoreAllMocks();
 });
 
 describe('queue (via FunctionQueue)', () => {
@@ -34,7 +35,7 @@ describe('queue (via FunctionQueue)', () => {
 
 	describe('options', () => {
 		it('exposes the given options through the options property', () => {
-			const options = { autoStart: false, maxConcurrentTasks: 3, defaultTimeout: 500, useAsyncTicking: false };
+			const options = { autoStart: false, maxConcurrentTasks: 3, defaultTimeout: 500, yieldInterval: false as const };
 			const queue = new FunctionQueue(options);
 
 			expect(queue.options).toEqual(options);
@@ -105,7 +106,7 @@ describe('queue (via FunctionQueue)', () => {
 		});
 
 		it('does not exceed maxConcurrentTasks when a synchronous task finishes during start()', async () => {
-			const queue = new FunctionQueue({ autoStart: false, maxConcurrentTasks: 2, useAsyncTicking: false });
+			const queue = new FunctionQueue({ autoStart: false, maxConcurrentTasks: 2, yieldInterval: false });
 			const counter = { running: 0, peak: 0 };
 
 			queue.push(() => {
@@ -176,8 +177,8 @@ describe('queue (via FunctionQueue)', () => {
 			expect(second.task).toHaveBeenCalledTimes(1);
 		});
 
-		it('settles a task promise before starting the next task with useAsyncTicking: true', async () => {
-			const queue = new FunctionQueue({ autoStart: false, useAsyncTicking: true });
+		it('settles a task promise before starting the next task with yieldInterval: 0', async () => {
+			const queue = new FunctionQueue({ autoStart: false, yieldInterval: 0 });
 			const order: string[] = [];
 
 			queue.pushAsync(() => order.push('first started')).then(() => order.push('first settled'));
@@ -189,7 +190,7 @@ describe('queue (via FunctionQueue)', () => {
 			expect(order).toEqual(['first started', 'first settled', 'second started']);
 		});
 
-		it('is not slowed down by timer clamping with useAsyncTicking: true', async () => {
+		it('is not slowed down by timer clamping with yieldInterval: 0', async () => {
 			vi.useRealTimers();
 
 			const queue = new FunctionQueue({ autoStart: false });
@@ -205,8 +206,8 @@ describe('queue (via FunctionQueue)', () => {
 			expect(Date.now() - start).toBeLessThan(1000);
 		});
 
-		it('starts the next task immediately with useAsyncTicking: false', async () => {
-			const queue = new FunctionQueue({ autoStart: false, useAsyncTicking: false });
+		it.each([false, Infinity] as const)('starts the next task immediately with yieldInterval: %s', async yieldInterval => {
+			const queue = new FunctionQueue({ autoStart: false, yieldInterval });
 			const order: string[] = [];
 
 			queue.pushAsync(() => order.push('first started')).then(() => order.push('first settled'));
@@ -218,8 +219,128 @@ describe('queue (via FunctionQueue)', () => {
 			expect(order).toEqual(['first started', 'second started', 'first settled']);
 		});
 
-		it('runs a long queue of synchronous tasks with useAsyncTicking: false', () => {
-			const queue = new FunctionQueue({ autoStart: false, useAsyncTicking: false });
+		it('runs tasks back-to-back until yieldInterval has elapsed, and then yields', async () => {
+			let clock = 0;
+			vi.spyOn(performance, 'now').mockImplementation(() => clock);
+
+			const queue = new FunctionQueue({ autoStart: false, yieldInterval: 5 });
+			let numRan = 0;
+
+			// Each task takes 2ms, so tasks start at 0, 2, and 4ms into each slice before the queue yields
+			for (let i = 0; i < 9; i++) {
+				queue.push(() => {
+					numRan++;
+					clock += 2;
+				});
+			}
+
+			queue.start();
+			expect(numRan).toBe(3);
+
+			await vi.runOnlyPendingTimersAsync();
+			expect(numRan).toBe(6);
+
+			await vi.runOnlyPendingTimersAsync();
+			expect(numRan).toBe(9);
+			expect(queue.active).toBe(false);
+		});
+
+		it('settles task promises when yielding between slices with a positive yieldInterval', async () => {
+			let clock = 0;
+			vi.spyOn(performance, 'now').mockImplementation(() => clock);
+
+			const queue = new FunctionQueue({ autoStart: false, yieldInterval: 5 });
+			const order: string[] = [];
+
+			// The first task uses up the slice, so the queue yields before starting the second
+			queue.pushAsync(() => {
+				order.push('first started');
+				clock += 5;
+			}).then(() => order.push('first settled'));
+
+			queue.push(() => order.push('second started'));
+
+			queue.start();
+			await flush();
+
+			expect(order).toEqual(['first started', 'first settled', 'second started']);
+		});
+
+		it('yields every 1ms by default where setImmediate is available', () => {
+			let clock = 0;
+			vi.spyOn(performance, 'now').mockImplementation(() => clock);
+
+			const queue = new FunctionQueue({ autoStart: false });
+			let numRan = 0;
+
+			// Each task takes 0.6ms, so the queue yields after the second task
+			for (let i = 0; i < 4; i++) {
+				queue.push(() => {
+					numRan++;
+					clock += 0.6;
+				});
+			}
+
+			queue.start();
+			expect(numRan).toBe(2);
+		});
+
+		it('yields after a slow task even when earlier tasks were fast enough to check the clock less often', async () => {
+			let clock = 0;
+			vi.spyOn(performance, 'now').mockImplementation(() => clock);
+
+			const queue = new FunctionQueue({ autoStart: false, yieldInterval: 1 });
+			let numRan = 0;
+
+			// 20 fast tasks switch to checking the clock in batches, and then a slow task should end the slice
+			for (let i = 0; i < 40; i++) {
+				queue.push(() => {
+					numRan++;
+					clock += numRan === 21 ? 50 : 0.01;
+				});
+			}
+
+			queue.start();
+
+			// The slow task is noticed at the next clock check, which is at most a batch of 8 tasks later
+			expect(numRan).toBeGreaterThanOrEqual(21);
+			expect(numRan).toBeLessThanOrEqual(28);
+
+			await vi.runAllTimersAsync();
+			expect(numRan).toBe(40);
+		});
+
+		it('stops starting tasks once a slice ends when running asynchronous tasks concurrently', async () => {
+			let clock = 0;
+			vi.spyOn(performance, 'now').mockImplementation(() => clock);
+
+			const queue = new FunctionQueue({ autoStart: false, maxConcurrentTasks: 4, yieldInterval: 1 });
+			let numRan = 0;
+
+			// Fast tasks switch to checking the clock in batches, and the slice ends after about 20 of them
+			for (let i = 0; i < 100; i++) {
+				queue.push(async () => {
+					numRan++;
+					clock += 0.05;
+				});
+			}
+
+			queue.start();
+
+			// Let promise callbacks run without running timers, so the queue can only continue by yielding
+			for (let i = 0; i < 1000; i++) {
+				await Promise.resolve();
+			}
+
+			expect(numRan).toBeLessThan(40);
+			expect(vi.getTimerCount()).toBe(1);
+
+			await vi.runAllTimersAsync();
+			expect(numRan).toBe(100);
+		});
+
+		it('runs a long queue of synchronous tasks with yieldInterval: false', () => {
+			const queue = new FunctionQueue({ autoStart: false, yieldInterval: false });
 			const failed = vi.fn();
 			let numRan = 0;
 			queue.on('taskFailed', failed);
@@ -236,7 +357,7 @@ describe('queue (via FunctionQueue)', () => {
 		});
 
 		it('drains a large backlog of tasks in linear time', () => {
-			const queue = new FunctionQueue({ autoStart: false, useAsyncTicking: false });
+			const queue = new FunctionQueue({ autoStart: false, yieldInterval: false });
 			const start = Date.now();
 
 			// Removing tasks with Array.prototype.shift() is quadratic, which takes several seconds at this size
@@ -250,8 +371,8 @@ describe('queue (via FunctionQueue)', () => {
 			expect(Date.now() - start).toBeLessThan(1000);
 		});
 
-		it('runs a long chain of synchronous tasks that push the next task with useAsyncTicking: false', () => {
-			const queue = new FunctionQueue({ useAsyncTicking: false });
+		it('runs a long chain of synchronous tasks that push the next task with yieldInterval: false', () => {
+			const queue = new FunctionQueue({ yieldInterval: false });
 			const failed = vi.fn();
 			let numRan = 0;
 			queue.on('taskFailed', failed);
@@ -863,7 +984,7 @@ describe('queue (via FunctionQueue)', () => {
 		});
 
 		it('stops the queue when called in between tasks', async () => {
-			const queue = new FunctionQueue({ autoStart: false });
+			const queue = new FunctionQueue({ autoStart: false, yieldInterval: 0 });
 			const second = vi.fn();
 			const stopped = vi.fn();
 			queue.on('stopped', stopped);
@@ -928,7 +1049,7 @@ describe('queue (via FunctionQueue)', () => {
 		});
 
 		it('resolves when called in between tasks', async () => {
-			const queue = new FunctionQueue({ autoStart: false });
+			const queue = new FunctionQueue({ autoStart: false, yieldInterval: 0 });
 			const second = vi.fn();
 			let result: Tracked<void> | undefined;
 

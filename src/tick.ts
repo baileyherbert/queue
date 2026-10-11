@@ -16,9 +16,9 @@
  * @param callback The function to invoke.
  */
 export function scheduleTick(callback: () => void) {
-	const { setImmediate } = globalThis as { setImmediate?: (callback: () => void) => unknown; };
+	const setImmediate = getSetImmediate();
 
-	if (typeof setImmediate === 'function') {
+	if (setImmediate) {
 		setImmediate(callback);
 		return;
 	}
@@ -37,4 +37,23 @@ export function scheduleTick(callback: () => void) {
 	}
 
 	setTimeout(callback, 0);
+}
+
+/**
+ * Returns the default `yieldInterval` for the current runtime, in milliseconds.
+ *
+ * Yielding with `setImmediate` (Node and Bun) is cheap, so the default is to yield every millisecond. Yielding with
+ * `MessageChannel` (browsers and Deno) costs more per yield, so the default is every 5 milliseconds instead, which
+ * is the same slice length that React's scheduler uses.
+ */
+export function getDefaultYieldInterval(): number {
+	return getSetImmediate() ? 1 : 5;
+}
+
+/**
+ * Returns the global `setImmediate` function if the runtime has one.
+ */
+function getSetImmediate() {
+	const { setImmediate } = globalThis as { setImmediate?: (callback: () => void) => unknown; };
+	return typeof setImmediate === 'function' ? setImmediate : undefined;
 }

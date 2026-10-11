@@ -31,18 +31,23 @@ export interface QueueOptions {
 	defaultTimeout?: number;
 
 	/**
-	 * When a task completes, this option changes how the next task is started.
+	 * How long the queue can keep starting tasks back-to-back, in milliseconds, before it yields to the event loop.
+	 * Yielding lets promises settle and other code in the application run (such as timers and I/O) while the queue
+	 * works through many tasks, especially synchronous, blocking ones.
 	 *
-	 * If true, the next task will be scheduled to run on a future turn of the event loop (with `setImmediate` where
-	 * available, or `MessageChannel` in browsers). This will allow promises to settle and other code in the
-	 * application to execute if the queue has synchronous, blocking tasks.
+	 * - `0` yields after every task, so each task's promise settles before the next task starts.
+	 * - A positive number starts tasks back-to-back until that much time has passed since the queue last yielded,
+	 *   and then yields once.
+	 * - `false` (or `Infinity`) never yields, and starts the next task as soon as a slot is free. This is the
+	 *   fastest, but task completion promises might resolve after new tasks start, and compute-heavy tasks can
+	 *   block the application.
 	 *
-	 * If false, the next task will be invoked immediately. As a result, task completion promises might resolve
-	 * after new tasks start, and compute-heavy tasks can slow the application overall.
+	 * Yielding uses `setImmediate` where available, or `MessageChannel` in browsers.
 	 *
-	 * Default: `true`
+	 * Default: `1` where `setImmediate` is available (Node and Bun), otherwise `5` (browsers and Deno), since yielding
+	 * with `MessageChannel` costs more per yield.
 	 */
-	useAsyncTicking?: boolean;
+	yieldInterval?: number | false;
 }
 
 /**

@@ -2,7 +2,8 @@ import { QueueOptions, TaskOptions } from './common';
 import { EventEmitter } from './events';
 import { FifoQueue } from './fifo';
 import { QueueGroup, TaskEventName } from './queue.group';
-import { scheduleTick } from './tick';
+import { getDefaultYieldInterval, scheduleTick } from './tick';
+import { YieldClock } from './yield';
 
 /**
  * The shared implementation behind `FunctionQueue` and `ItemQueue`, which handles concurrency, timeouts, events, and
@@ -24,6 +25,7 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	private _isFilling = false;
 	private _needsFill = false;
 	private _isTickScheduled = false;
+	private _yieldClock = new YieldClock();
 
 	private _tasks: FifoQueue<InternalTaskRecord<T>>;
 	private _immediateTasks: FifoQueue<InternalTaskRecord<T>>;
@@ -216,8 +218,9 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	 * If the queue is stopping, no tasks are started. Instead, the stop is completed if there are no running tasks
 	 * left to wait for, which happens when `stop()` is called in between ticks.
 	 *
-	 * When `useAsyncTicking` is disabled, synchronous tasks that finish during this method request another fill with
-	 * `_needsFill` rather than calling this method recursively, so that the stack doesn't grow with each task.
+	 * When the queue doesn't yield between tasks (see `yieldInterval`), synchronous tasks that finish during this
+	 * method request another fill with `_needsFill` rather than calling this method recursively, so that the stack
+	 * doesn't grow with each task.
 	 */
 	private _fill() {
 		// Remember if we're already filling further up the stack, since this can be called by tasks that push tasks
@@ -237,7 +240,7 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 				}
 
 				// Only fill the slots that are free right now, so a synchronous task that finishes during this loop
-				// doesn't free its slot for the next task (that's left to the tick, which respects `useAsyncTicking`)
+				// doesn't free its slot for the next task (that's left to the tick, which respects `yieldInterval`)
 				const freeSlots = this._maxConcurrentTasks - this._numRunningTasks;
 				let numStarted = 0;
 
@@ -264,6 +267,24 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	}
 
 	/**
+	 * Returns whether the queue should yield to the event loop before starting the next task, based on
+	 * `yieldInterval` and how long it has been since the queue last yielded.
+	 */
+	private _shouldYield() {
+		const interval = this._yieldInterval;
+
+		if (interval <= 0) {
+			return true;
+		}
+
+		if (interval === Infinity) {
+			return false;
+		}
+
+		return this._yieldClock.shouldYield(interval);
+	}
+
+	/**
 	 * Schedules the queue to be filled on the next tick, unless a tick is already scheduled. A single fill starts
 	 * tasks in all free slots, so tasks that finish before the tick don't need to schedule their own.
 	 */
@@ -273,6 +294,7 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 
 			scheduleTick(() => {
 				this._isTickScheduled = false;
+				this._yieldClock.startSlice();
 				this._fill();
 			});
 		}
@@ -368,6 +390,7 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 		// Start the queue if necessary
 		if (!this._active) {
 			this._active = true;
+			this._yieldClock.reset();
 			this._emit('started');
 		}
 
@@ -439,7 +462,7 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 
 		// Otherwise, fill the queue again to run the next task
 		else {
-			if (this._useAsyncTicking) {
+			if (this._shouldYield()) {
 				this._scheduleFill();
 			}
 
@@ -531,10 +554,11 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	}
 
 	/**
-	 * Whether or not to tick asynchronously.
+	 * How long the queue can start tasks back-to-back before yielding, in milliseconds (`Infinity` to never yield).
 	 */
-	private get _useAsyncTicking() {
-		return this.options.useAsyncTicking ?? true;
+	private get _yieldInterval() {
+		const interval = this.options.yieldInterval ?? getDefaultYieldInterval();
+		return interval === false ? Infinity : interval;
 	}
 
 }

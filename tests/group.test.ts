@@ -398,7 +398,7 @@ describe('QueueGroup (via FunctionQueue)', () => {
 		});
 
 		it('does not emit events for the same item pushed through another group', async () => {
-			const queue = new ItemQueue<string>(() => {}, { autoStart: false });
+			const queue = new ItemQueue<string>(() => {}, { autoStart: false, yieldInterval: 0 });
 			const group1 = queue.createGroup();
 			const group2 = queue.createGroup();
 			const finished1 = vi.fn();
