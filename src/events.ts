@@ -78,6 +78,9 @@ export class EventEmitter<S extends EventEmitterSchema = EventEmitterSchema> {
 	/**
 	 * Emits an event to listeners.
 	 *
+	 * Errors thrown by listeners don't interrupt the emitter or the remaining listeners. Instead, they are rethrown
+	 * asynchronously, so they are still reported as uncaught exceptions.
+	 *
 	 * @param event
 	 * @param args
 	 */
@@ -93,7 +96,14 @@ export class EventEmitter<S extends EventEmitterSchema = EventEmitterSchema> {
 
 		// Execute all callbacks
 		for (const callback of callbacks) {
-			callback.apply(this, args);
+			try {
+				callback.apply(this, args);
+			}
+			catch (error) {
+				setTimeout(() => {
+					throw error;
+				}, 0);
+			}
 		}
 	}
 

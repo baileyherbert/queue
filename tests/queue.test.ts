@@ -1011,5 +1011,54 @@ describe('queue (via FunctionQueue)', () => {
 
 			expect(listener).toHaveBeenCalledTimes(1);
 		});
+
+		it('keeps a consistent state when a listener throws during a synchronous task', async () => {
+			const queue = new FunctionQueue();
+			const error = new Error('listener failure');
+			const finished = vi.fn();
+			queue.on('taskCompleted', () => { throw error; });
+			queue.on('taskFinished', finished);
+
+			const result = track(queue.pushAsync(() => {}));
+
+			expect(queue.length).toBe(0);
+			expect(queue.active).toBe(false);
+			expect(finished).toHaveBeenCalledTimes(1);
+
+			await expect(flush()).rejects.toBe(error);
+			expect(result.status).toBe('fulfilled');
+		});
+
+		it('keeps processing tasks when a listener throws during an asynchronous task', async () => {
+			const queue = new FunctionQueue();
+			const error = new Error('listener failure');
+			const first = controlled();
+			const second = controlled();
+			queue.on('taskCompleted', () => { throw error; });
+
+			const result = track(queue.pushAsync(first.task));
+			queue.push(second.task);
+
+			first.finish();
+			await expect(flush()).rejects.toBe(error);
+			await flush();
+
+			expect(result.status).toBe('fulfilled');
+			expect(second.task).toHaveBeenCalledTimes(1);
+			expect(queue.length).toBe(1);
+		});
+
+		it('calls the remaining listeners when a listener throws', async () => {
+			const queue = new FunctionQueue();
+			const error = new Error('listener failure');
+			const listener = vi.fn();
+			queue.on('taskStarted', () => { throw error; });
+			queue.on('taskStarted', listener);
+
+			queue.push(() => {});
+
+			expect(listener).toHaveBeenCalledTimes(1);
+			await expect(flush()).rejects.toBe(error);
+		});
 	});
 });

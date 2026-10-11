@@ -275,37 +275,43 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 		}
 
 		// Execute the task with error handling
+		// Only the task itself is guarded, so errors from finishing the task aren't mistaken for task errors
+		let response: any;
+
 		try {
-			const response = this._process(task.item);
-
-			// Handle promises
-			if (response && typeof response.then === 'function') {
-				// Wait for the promise to resolve
-				response.then(() => {
-					if (!isTaskFinished) {
-						isTaskFinished = true;
-						this._afterExecuteTask(task);
-					}
-				})
-
-				// Listen for rejections from the promise as well
-				.catch((error: any) => {
-					if (!isTaskFinished) {
-						isTaskFinished = true;
-						this._afterExecuteTask(task, 0, error);
-					}
-				});
-			}
-
-			// Otherwise finish immediately
-			else {
-				isTaskFinished = true;
-				this._afterExecuteTask(task);
-			}
+			response = this._process(task.item);
 		}
 		catch (error) {
 			isTaskFinished = true;
 			this._afterExecuteTask(task, 0, error);
+			return;
+		}
+
+		// Handle promises
+		if (response && typeof response.then === 'function') {
+			response.then(
+				// Wait for the promise to resolve
+				() => {
+					if (!isTaskFinished) {
+						isTaskFinished = true;
+						this._afterExecuteTask(task);
+					}
+				},
+
+				// Listen for rejections from the promise as well
+				(error: any) => {
+					if (!isTaskFinished) {
+						isTaskFinished = true;
+						this._afterExecuteTask(task, 0, error);
+					}
+				}
+			);
+		}
+
+		// Otherwise finish immediately
+		else {
+			isTaskFinished = true;
+			this._afterExecuteTask(task);
 		}
 	}
 

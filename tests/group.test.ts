@@ -442,5 +442,24 @@ describe('QueueGroup (via FunctionQueue)', () => {
 				'group taskFinished'
 			]);
 		});
+
+		it('keeps a consistent state when a listener throws', async () => {
+			const queue = new FunctionQueue();
+			const group = queue.createGroup();
+			const error = new Error('listener failure');
+			const { task, finish } = controlled();
+			group.on('taskFinished', () => { throw error; });
+
+			const result = track(group.pushAsync(task));
+			const completion = track(group.getCompletionPromise());
+
+			finish();
+			await expect(flush()).rejects.toBe(error);
+
+			expect(queue.length).toBe(0);
+			expect(group.length).toBe(0);
+			expect(result.status).toBe('fulfilled');
+			expect(completion.status).toBe('fulfilled');
+		});
 	});
 });
