@@ -432,6 +432,44 @@ describe('queue (via FunctionQueue)', () => {
 
 			expect(work).toHaveBeenCalledTimes(1);
 		});
+
+		it('rejects with an Error that keeps a non-error rejection value as its cause', async () => {
+			const queue = new FunctionQueue();
+			const value = { code: 42 };
+
+			const result = track(queue.pushAsync(() => Promise.reject(value)));
+			await flush();
+
+			expect(result.status).toBe('rejected');
+			expect(result.reason).toBeInstanceOf(Error);
+			expect((result.reason as Error).message).toBe('Task failed with a non-error value');
+			expect((result.reason as Error).cause).toBe(value);
+		});
+
+		it('rejects with an Error that uses a thrown string as its message', async () => {
+			const queue = new FunctionQueue();
+
+			const result = track(queue.pushAsync(() => { throw 'string failure'; }));
+			await flush();
+
+			expect(result.status).toBe('rejected');
+			expect(result.reason).toBeInstanceOf(Error);
+			expect((result.reason as Error).message).toBe('string failure');
+			expect((result.reason as Error).cause).toBe('string failure');
+		});
+
+		it('rejects when a task rejects or throws with undefined', async () => {
+			const queue = new FunctionQueue({ maxConcurrentTasks: 2 });
+
+			const rejected = track(queue.pushAsync(() => Promise.reject(undefined)));
+			const thrown = track(queue.pushAsync(() => { throw undefined; }));
+			await flush();
+
+			expect(rejected.status).toBe('rejected');
+			expect(rejected.reason).toBeInstanceOf(Error);
+			expect(thrown.status).toBe('rejected');
+			expect(thrown.reason).toBeInstanceOf(Error);
+		});
 	});
 
 	describe('start()', () => {
@@ -1097,6 +1135,21 @@ describe('queue (via FunctionQueue)', () => {
 
 			expect(listener).toHaveBeenCalledTimes(1);
 			await expect(flush()).rejects.toBe(error);
+		});
+
+		it('emits taskFailed instead of taskCompleted when a task rejects with undefined', async () => {
+			const queue = new FunctionQueue();
+			const failed = vi.fn();
+			const completed = vi.fn();
+			const task = () => Promise.reject(undefined);
+			queue.on('taskFailed', failed);
+			queue.on('taskCompleted', completed);
+
+			queue.push(task);
+			await flush();
+
+			expect(completed).not.toHaveBeenCalled();
+			expect(failed).toHaveBeenCalledExactlyOnceWith(expect.any(Error), task);
 		});
 	});
 });

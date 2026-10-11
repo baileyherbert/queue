@@ -305,7 +305,7 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 		}
 		catch (error) {
 			isTaskFinished = true;
-			this._afterExecuteTask(task, 0, error);
+			this._afterExecuteTask(task, 0, toError(error));
 			return;
 		}
 
@@ -321,10 +321,10 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 				},
 
 				// Listen for rejections from the promise as well
-				(error: any) => {
+				(error: unknown) => {
 					if (!isTaskFinished) {
 						isTaskFinished = true;
-						this._afterExecuteTask(task, 0, error);
+						this._afterExecuteTask(task, 0, toError(error));
 					}
 				}
 			);
@@ -360,8 +360,10 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	 * Performs logic after executing a task.
 	 *
 	 * @param task
+	 * @param timeout The task's timeout in milliseconds if it timed out.
+	 * @param error The error if the task failed.
 	 */
-	private _afterExecuteTask(task: InternalTaskRecord<T>, timeout?: number, error?: any) {
+	private _afterExecuteTask(task: InternalTaskRecord<T>, timeout?: number, error?: Error) {
 		// Remove the task as running
 		this._numRunningTasks--;
 
@@ -378,10 +380,6 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 
 		// Emit error event
 		else if (typeof error !== 'undefined') {
-			if (!(error instanceof Error)) {
-				error = new Error(error);
-			}
-
 			this._emitTaskEvent(task, 'taskFailed', error, task.item);
 		}
 
@@ -510,6 +508,23 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 		return this.options.useAsyncTicking ?? true;
 	}
 
+}
+
+/**
+ * Converts a value thrown or rejected by a task into an `Error`. Values that aren't errors are wrapped in a new
+ * `Error`, with the original value available as its `cause`.
+ *
+ * @param value
+ */
+function toError(value: unknown): Error {
+	if (value instanceof Error) {
+		return value;
+	}
+
+	// Strings are typically used as messages, so keep them as the message
+	const message = typeof value === 'string' ? value : 'Task failed with a non-error value';
+
+	return new Error(message, { cause: value });
 }
 
 /**
