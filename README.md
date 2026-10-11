@@ -3,6 +3,8 @@
 This package offers two different types of queues, an `ItemQueue` and a `FunctionQueue`, for running tasks with concurrency and timeouts. It's my personal replacement to the `queue` package and offers some cool features:
 
 - ⌚ Working timeouts
+- ⏳ Non-blocking by default for synchronous tasks
+- 🚀 [Extremely fast regardless of scale](#benchmarks)
 - ✨ [Task groups](https://github.com/baileyherbert/queue/blob/master/docs/groups.md)
 
 # Getting started
@@ -64,3 +66,65 @@ await group.getCompletionPromise();
 ```
 
 [**📚 Click here for task group documentation.**](https://github.com/baileyherbert/queue/blob/master/docs/groups.md)
+
+# Benchmarks
+
+Below is a comparison of how long this package takes to work through a queue of tasks, compared to the popular and mainstream queue packages. Lower is better.
+
+By default, this package yields to the event loop between tasks, which helps keep the rest of your application responsive when the queue is running synchronous functions. The benchmarks below are measured with this default behavior.
+
+## Asynchronous tasks, concurrency 1
+
+| Library | 10k tasks | 100k tasks | 1M tasks |
+| --- | --: | --: | --: |
+| @baileyherbert/queue | **4.8 ms** | **31 ms** | **202 ms** |
+| p-limit | 16 ms | 156 ms | 1.79 s |
+| fastq | 6.1 ms | 89 ms | 855 ms |
+| async | 11 ms | 102 ms | 895 ms |
+| p-queue | 18 ms | 122 ms | 1.13 s |
+| queue | 8.6 ms | 2.18 s | ⏱️ Over 30 s |
+| throat | 5.9 ms | 55 ms | 412 ms |
+| bottleneck | 22.5 s | ⏱️ Over 30 s | ⏱️ Over 30 s |
+
+## Asynchronous tasks, concurrency 16
+
+| Library | 10k tasks | 100k tasks | 1M tasks |
+| --- | --: | --: | --: |
+| @baileyherbert/queue | **5.2 ms** | **29 ms** | **166 ms** |
+| p-limit | 15 ms | 165 ms | 1.79 s |
+| fastq | 6.9 ms | 104 ms | 998 ms |
+| async | 11 ms | 101 ms | 855 ms |
+| p-queue | 19 ms | 120 ms | 1.15 s |
+| queue | 8.7 ms | 2.20 s | ⏱️ Over 30 s |
+| throat | 6.2 ms | 58 ms | 435 ms |
+| bottleneck | 22.5 s | ⏱️ Over 30 s | ⏱️ Over 30 s |
+
+## Synchronous tasks, concurrency 1
+
+| Library | 10k tasks | 100k tasks | 1M tasks |
+| --- | --: | --: | --: |
+| @baileyherbert/queue | **3.7 ms** | **26 ms** | **187 ms** |
+| p-limit | 16 ms | 158 ms | 1.64 s |
+| fastq | ❌ Stack overflow | ❌ Stack overflow | ❌ Stack overflow |
+| async | 10 ms | 92 ms | 802 ms |
+| p-queue | 19 ms | 117 ms | 1.22 s |
+| queue | ❌ Stack overflow | ❌ Stack overflow | ❌ Stack overflow |
+| throat | 5.9 ms | 53 ms | 412 ms |
+| bottleneck | 22.5 s | ⏱️ Over 30 s | ⏱️ Over 30 s |
+
+## Peak memory, asynchronous tasks, concurrency 16
+
+How much memory the process used at its peak while working through the queue, above what it used beforehand. Lower is better.
+
+| Library | 100k tasks | 1M tasks |
+| --- | --: | --: |
+| @baileyherbert/queue | **48 MB** | **264 MB** |
+| p-limit | 186 MB | 953 MB |
+| fastq | 140 MB | 897 MB |
+| async | 163 MB | 660 MB |
+| p-queue | 180 MB | 1.31 GB |
+| queue | 52 MB | ≥ 266 MB |
+| throat | 89 MB | 596 MB |
+| bottleneck | ≥ 508 MB | ≥ 2.19 GB |
+
+Measured with Node v24.12.0 on an AMD Ryzen 9 9950X3D (Linux, WSL2) on 2026-10-11, using the median of 5 runs against our `FunctionQueue` class. The other libraries' versions are pinned in [`package.json`](https://github.com/baileyherbert/queue/blob/master/package.json). See the [benchmark readme](https://github.com/baileyherbert/queue/tree/master/bench) for how the benchmarks work, what causes the failures, and how to run them yourself.

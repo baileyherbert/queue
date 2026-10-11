@@ -1,0 +1,530 @@
+{
+	"date": "2026-10-11",
+	"node": "v24.12.0",
+	"cpu": "AMD Ryzen 9 9950X3D 16-Core Processor",
+	"runs": 5,
+	"timeLimit": 30000,
+	"versions": {
+		"@baileyherbert/queue": "3.0.0",
+		"p-limit": "7.3.3",
+		"fastq": "1.20.3",
+		"async": "3.2.6",
+		"p-queue": "9.3.3",
+		"queue": "7.0.0",
+		"throat": "6.0.2",
+		"bottleneck": "2.19.5"
+	},
+	"scenarios": [
+		{
+			"title": "Asynchronous tasks, concurrency 1",
+			"metric": "time",
+			"kind": "async",
+			"concurrency": 1,
+			"sizes": [
+				10000,
+				100000,
+				1000000
+			],
+			"rows": [
+				{
+					"name": "@baileyherbert/queue",
+					"pkg": "@baileyherbert/queue",
+					"results": [
+						{
+							"ms": 4.798328999999999
+						},
+						{
+							"ms": 30.654839000000003
+						},
+						{
+							"ms": 202.013375
+						}
+					]
+				},
+				{
+					"name": "p-limit",
+					"pkg": "p-limit",
+					"results": [
+						{
+							"ms": 15.55161
+						},
+						{
+							"ms": 156.43086
+						},
+						{
+							"ms": 1794.868029
+						}
+					]
+				},
+				{
+					"name": "fastq",
+					"pkg": "fastq",
+					"results": [
+						{
+							"ms": 6.062533999999999
+						},
+						{
+							"ms": 89.486245
+						},
+						{
+							"ms": 855.03711
+						}
+					]
+				},
+				{
+					"name": "async",
+					"pkg": "async",
+					"results": [
+						{
+							"ms": 10.865016
+						},
+						{
+							"ms": 102.06600399999999
+						},
+						{
+							"ms": 894.5934100000001
+						}
+					]
+				},
+				{
+					"name": "p-queue",
+					"pkg": "p-queue",
+					"results": [
+						{
+							"ms": 18.403893999999994
+						},
+						{
+							"ms": 121.65451800000001
+						},
+						{
+							"ms": 1133.439858
+						}
+					]
+				},
+				{
+					"name": "queue",
+					"pkg": "queue",
+					"results": [
+						{
+							"ms": 8.550936999999998
+						},
+						{
+							"ms": 2183.178533
+						},
+						{
+							"error": "timeout"
+						}
+					]
+				},
+				{
+					"name": "throat",
+					"pkg": "throat",
+					"results": [
+						{
+							"ms": 5.934859000000003
+						},
+						{
+							"ms": 54.803585999999996
+						},
+						{
+							"ms": 411.651285
+						}
+					]
+				},
+				{
+					"name": "bottleneck",
+					"pkg": "bottleneck",
+					"results": [
+						{
+							"ms": 22489.772197000002
+						},
+						{
+							"error": "timeout"
+						},
+						{
+							"error": "timeout"
+						}
+					]
+				}
+			]
+		},
+		{
+			"title": "Asynchronous tasks, concurrency 16",
+			"metric": "time",
+			"kind": "async",
+			"concurrency": 16,
+			"sizes": [
+				10000,
+				100000,
+				1000000
+			],
+			"rows": [
+				{
+					"name": "@baileyherbert/queue",
+					"pkg": "@baileyherbert/queue",
+					"results": [
+						{
+							"ms": 5.191331000000002
+						},
+						{
+							"ms": 28.984569
+						},
+						{
+							"ms": 166.442272
+						}
+					]
+				},
+				{
+					"name": "p-limit",
+					"pkg": "p-limit",
+					"results": [
+						{
+							"ms": 15.277999000000001
+						},
+						{
+							"ms": 164.66168
+						},
+						{
+							"ms": 1791.517101
+						}
+					]
+				},
+				{
+					"name": "fastq",
+					"pkg": "fastq",
+					"results": [
+						{
+							"ms": 6.940142000000002
+						},
+						{
+							"ms": 103.614846
+						},
+						{
+							"ms": 997.816728
+						}
+					]
+				},
+				{
+					"name": "async",
+					"pkg": "async",
+					"results": [
+						{
+							"ms": 11.445969000000005
+						},
+						{
+							"ms": 100.76433999999999
+						},
+						{
+							"ms": 855.469516
+						}
+					]
+				},
+				{
+					"name": "p-queue",
+					"pkg": "p-queue",
+					"results": [
+						{
+							"ms": 18.78833
+						},
+						{
+							"ms": 120.430044
+						},
+						{
+							"ms": 1149.674462
+						}
+					]
+				},
+				{
+					"name": "queue",
+					"pkg": "queue",
+					"results": [
+						{
+							"ms": 8.719184000000002
+						},
+						{
+							"ms": 2196.715146
+						},
+						{
+							"error": "timeout"
+						}
+					]
+				},
+				{
+					"name": "throat",
+					"pkg": "throat",
+					"results": [
+						{
+							"ms": 6.184492999999996
+						},
+						{
+							"ms": 58.00501399999999
+						},
+						{
+							"ms": 434.634673
+						}
+					]
+				},
+				{
+					"name": "bottleneck",
+					"pkg": "bottleneck",
+					"results": [
+						{
+							"ms": 22451.799199
+						},
+						{
+							"error": "timeout"
+						},
+						{
+							"error": "timeout"
+						}
+					]
+				}
+			]
+		},
+		{
+			"title": "Synchronous tasks, concurrency 1",
+			"metric": "time",
+			"kind": "sync",
+			"concurrency": 1,
+			"sizes": [
+				10000,
+				100000,
+				1000000
+			],
+			"rows": [
+				{
+					"name": "@baileyherbert/queue",
+					"pkg": "@baileyherbert/queue",
+					"results": [
+						{
+							"ms": 3.6789859999999983
+						},
+						{
+							"ms": 25.566709999999997
+						},
+						{
+							"ms": 186.80487799999997
+						}
+					]
+				},
+				{
+					"name": "p-limit",
+					"pkg": "p-limit",
+					"results": [
+						{
+							"ms": 16.140257
+						},
+						{
+							"ms": 158.235783
+						},
+						{
+							"ms": 1640.199375
+						}
+					]
+				},
+				{
+					"name": "fastq",
+					"pkg": "fastq",
+					"results": [
+						{
+							"error": "stack overflow"
+						},
+						{
+							"error": "stack overflow"
+						},
+						{
+							"error": "stack overflow"
+						}
+					]
+				},
+				{
+					"name": "async",
+					"pkg": "async",
+					"results": [
+						{
+							"ms": 10.269865000000003
+						},
+						{
+							"ms": 91.85226800000001
+						},
+						{
+							"ms": 801.575549
+						}
+					]
+				},
+				{
+					"name": "p-queue",
+					"pkg": "p-queue",
+					"results": [
+						{
+							"ms": 19.246966999999998
+						},
+						{
+							"ms": 117.156995
+						},
+						{
+							"ms": 1224.494753
+						}
+					]
+				},
+				{
+					"name": "queue",
+					"pkg": "queue",
+					"results": [
+						{
+							"error": "stack overflow"
+						},
+						{
+							"error": "stack overflow"
+						},
+						{
+							"error": "stack overflow"
+						}
+					]
+				},
+				{
+					"name": "throat",
+					"pkg": "throat",
+					"results": [
+						{
+							"ms": 5.880013999999999
+						},
+						{
+							"ms": 53.023210999999996
+						},
+						{
+							"ms": 412.203437
+						}
+					]
+				},
+				{
+					"name": "bottleneck",
+					"pkg": "bottleneck",
+					"results": [
+						{
+							"ms": 22481.510388000002
+						},
+						{
+							"error": "timeout"
+						},
+						{
+							"error": "timeout"
+						}
+					]
+				}
+			]
+		},
+		{
+			"title": "Peak memory, asynchronous tasks, concurrency 16",
+			"description": "How much memory the process used at its peak while working through the queue, above what it used beforehand. Lower is better.",
+			"metric": "memory",
+			"kind": "async",
+			"concurrency": 16,
+			"sizes": [
+				100000,
+				1000000
+			],
+			"rows": [
+				{
+					"name": "@baileyherbert/queue",
+					"pkg": "@baileyherbert/queue",
+					"results": [
+						{
+							"bytes": 48279552
+						},
+						{
+							"bytes": 264437760
+						}
+					]
+				},
+				{
+					"name": "p-limit",
+					"pkg": "p-limit",
+					"results": [
+						{
+							"bytes": 185704448
+						},
+						{
+							"bytes": 953028608
+						}
+					]
+				},
+				{
+					"name": "fastq",
+					"pkg": "fastq",
+					"results": [
+						{
+							"bytes": 140394496
+						},
+						{
+							"bytes": 897335296
+						}
+					]
+				},
+				{
+					"name": "async",
+					"pkg": "async",
+					"results": [
+						{
+							"bytes": 162922496
+						},
+						{
+							"bytes": 659562496
+						}
+					]
+				},
+				{
+					"name": "p-queue",
+					"pkg": "p-queue",
+					"results": [
+						{
+							"bytes": 179511296
+						},
+						{
+							"bytes": 1307553792
+						}
+					]
+				},
+				{
+					"name": "queue",
+					"pkg": "queue",
+					"results": [
+						{
+							"bytes": 52326400
+						},
+						{
+							"error": "timeout",
+							"bytes": 265797632
+						}
+					]
+				},
+				{
+					"name": "throat",
+					"pkg": "throat",
+					"results": [
+						{
+							"bytes": 88567808
+						},
+						{
+							"bytes": 596115456
+						}
+					]
+				},
+				{
+					"name": "bottleneck",
+					"pkg": "bottleneck",
+					"results": [
+						{
+							"error": "timeout",
+							"bytes": 507797504
+						},
+						{
+							"error": "timeout",
+							"bytes": 2192609280
+						}
+					]
+				}
+			]
+		}
+	]
+}

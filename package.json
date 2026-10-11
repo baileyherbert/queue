@@ -14,9 +14,18 @@
 		"build": "tsc",
 		"dev": "vitest",
 		"test": "vitest run",
-		"typecheck": "tsc --noEmit && tsc -p tests"
+		"typecheck": "tsc --noEmit && tsc -p tests",
+		"bench": "npm run build && node bench/run.mjs",
+		"bench:render": "node bench/render.mjs"
 	},
 	"devDependencies": {
+		"async": "3.2.6",
+		"bottleneck": "2.19.5",
+		"fastq": "1.20.3",
+		"p-limit": "7.3.3",
+		"p-queue": "9.3.3",
+		"queue": "7.0.0",
+		"throat": "6.0.2",
 		"typescript": "^7.0.2",
 		"vitest": "^5.0.3"
 	},
