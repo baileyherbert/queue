@@ -301,6 +301,28 @@ describe('queue (via FunctionQueue)', () => {
 			expect(result.status).toBe('fulfilled');
 		});
 
+		it('clears the timeout of a task that finishes in time', async () => {
+			const queue = new FunctionQueue({ defaultTimeout: 500, maxConcurrentTasks: 2 });
+			const timedOut = vi.fn();
+			const tasks = [controlled(), controlled()];
+			queue.on('taskTimedOut', timedOut);
+
+			for (const { task } of tasks) {
+				queue.push(task);
+			}
+
+			for (const { finish } of tasks) {
+				finish();
+			}
+
+			await flush();
+			expect(queue.length).toBe(0);
+			expect(vi.getTimerCount()).toBe(0);
+
+			await vi.advanceTimersByTimeAsync(1000);
+			expect(timedOut).not.toHaveBeenCalled();
+		});
+
 		it('runs a runImmediately task right away even when the queue is full', async () => {
 			const queue = new FunctionQueue();
 			const blocker = controlled();

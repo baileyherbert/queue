@@ -27,7 +27,6 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 
 	private _tasks: FifoQueue<InternalTaskRecord<T>>;
 	private _immediateTasks: FifoQueue<InternalTaskRecord<T>>;
-	private _timeouts: Map<InternalTaskRecord<T>, any>;
 
 	private _stopPromise?: Promise<void>;
 	private _stopPromiseResolver?: (...args: any[]) => void;
@@ -43,7 +42,6 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 		this.options = options || {};
 		this._tasks = new FifoQueue();
 		this._immediateTasks = new FifoQueue();
-		this._timeouts = new Map();
 	}
 
 	/**
@@ -309,12 +307,12 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 
 		// Set the timeout if applicable
 		if (timeoutDuration > 0) {
-			this._timeouts.set(task, setTimeout(() => {
+			task.timeoutId = setTimeout(() => {
 				if (!isTaskFinished) {
 					isTaskFinished = true;
 					this._afterExecuteTask(task, timeoutDuration);
 				}
-			}, timeoutDuration));
+			}, timeoutDuration);
 		}
 
 		// Execute the task with error handling
@@ -388,10 +386,10 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 		// Remove the task as running
 		this._numRunningTasks--;
 
-		// Remove the timeout from the cache
-		if (this._timeouts.has(task)) {
-			clearTimeout(this._timeouts.get(task));
-			this._timeouts.delete(task);
+		// Clear the task's timeout
+		if (task.timeoutId !== undefined) {
+			clearTimeout(task.timeoutId);
+			task.timeoutId = undefined;
 		}
 
 		// Emit timeout event
@@ -480,7 +478,6 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 		// State cleanup
 		this._active = false;
 		this._stopping = false;
-		this._timeouts = new Map();
 
 		// Call the stop resolver if needed
 		let resolver: Function | undefined;
@@ -631,6 +628,11 @@ export interface InternalTaskRecord<T> {
 	 * The group that this task was pushed through, if applicable.
 	 */
 	group?: QueueGroup<T>;
+
+	/**
+	 * The handle for the task's timeout while it's running, if it has one.
+	 */
+	timeoutId?: ReturnType<typeof setTimeout>;
 
 	/**
 	 * The resolve function for the task's tracking promise, if applicable.
