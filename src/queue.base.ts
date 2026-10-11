@@ -113,42 +113,29 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	/**
 	 * Starts the queue, running pending tasks until all free slots are filled. Tasks configured to `runImmediately`
 	 * at the front of the queue are started even when there are no free slots.
+	 *
+	 * If the queue is currently stopping, the stop is cancelled and the queue continues processing tasks.
 	 */
 	public start() {
-		// Only fill the slots that are free right now, so a synchronous task that finishes during this loop doesn't
-		// free its slot for the next task (that's left to the tick, which respects `useAsyncTicking`)
-		const freeSlots = this._maxConcurrentTasks - this._numRunningTasks;
-		let numStarted = 0;
-
-		while (this._tasks.length > 0) {
-			// Also check the live count, since synchronous ticking can start tasks from within this loop
-			const hasFreeSlot = numStarted < freeSlots && this._numRunningTasks < this._maxConcurrentTasks;
-
-			if (!hasFreeSlot && !this._tasks[0].options?.runImmediately) {
-				break;
-			}
-
-			numStarted++;
-			this._executeTask(this._tasks.shift()!);
-		}
+		// Starting manually cancels a pending stop
+		this._stopping = false;
+		this._fill();
 	}
 
 	/**
 	 * Starts the queue and returns a `Promise` which resolves once it has stopped.
 	 */
 	public startAsync() {
-		if (this._stopPromise) {
-			return this._stopPromise;
-		}
+		// Get the promise before starting, in case the queue finishes synchronously
+		const promise = this._getStopPromise();
+		this.start();
 
-		return this._stopPromise = new Promise<void>(resolve => {
-			this._stopPromiseResolver = resolve;
-			this.start();
-		});
+		return promise;
 	}
 
 	/**
-	 * Gracefully stops the queue, allowing all running tasks to finish.
+	 * Gracefully stops the queue, allowing all running tasks to finish. No new tasks will be started, even if they
+	 * are pushed with `autoStart` enabled, until `start()` is called again.
 	 */
 	public stop() {
 		if (this._active) {
@@ -162,15 +149,10 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	 */
 	public stopAsync(): Promise<void> {
 		if (this._active) {
+			const promise = this._getStopPromise();
 			this.stop();
 
-			if (this._stopPromise) {
-				return this._stopPromise;
-			}
-
-			return this._stopPromise = new Promise<void>(resolve => {
-				this._stopPromiseResolver = resolve;
-			});
+			return promise;
 		}
 
 		// Nothing to do, resolve immediately
@@ -193,7 +175,7 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	 */
 	private _enqueueTask(task: InternalTaskRecord<T>) {
 		// If this is an immediate task, add it to the beginning of the queue
-		// The start() method will always check to see if the first task in the queue is an immediate
+		// The _fill() method will always check to see if the first task in the queue is an immediate
 		if (task.options?.runImmediately) {
 			this._tasks.unshift(task);
 		}
@@ -206,10 +188,57 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 		// Emit added event
 		this._emit('taskAdded', task.item);
 
-		// Start the queue automatically
+		// Start the queue automatically (unlike start(), this won't cancel a pending stop)
 		if (this._autoStart) {
-			this.start();
+			this._fill();
 		}
+	}
+
+	/**
+	 * Runs pending tasks until all free slots are filled. Tasks configured to `runImmediately` at the front of the
+	 * queue are started even when there are no free slots.
+	 *
+	 * If the queue is stopping, no tasks are started. Instead, the stop is completed if there are no running tasks
+	 * left to wait for, which happens when `stop()` is called in between ticks.
+	 */
+	private _fill() {
+		if (this._stopping) {
+			if (this._numRunningTasks === 0) {
+				this._finishStoppingQueue();
+			}
+
+			return;
+		}
+
+		// Only fill the slots that are free right now, so a synchronous task that finishes during this loop doesn't
+		// free its slot for the next task (that's left to the tick, which respects `useAsyncTicking`)
+		const freeSlots = this._maxConcurrentTasks - this._numRunningTasks;
+		let numStarted = 0;
+
+		while (this._tasks.length > 0) {
+			// Also check the live count, since synchronous ticking can start tasks from within this loop
+			const hasFreeSlot = numStarted < freeSlots && this._numRunningTasks < this._maxConcurrentTasks;
+
+			if (!hasFreeSlot && !this._tasks[0].options?.runImmediately) {
+				break;
+			}
+
+			numStarted++;
+			this._executeTask(this._tasks.shift()!);
+		}
+	}
+
+	/**
+	 * Returns the `Promise` which resolves the next time the queue stops, creating it if necessary.
+	 */
+	private _getStopPromise() {
+		if (!this._stopPromise) {
+			this._stopPromise = new Promise<void>(resolve => {
+				this._stopPromiseResolver = resolve;
+			});
+		}
+
+		return this._stopPromise;
 	}
 
 	/**
@@ -342,18 +371,25 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 			task.promiseReject(error);
 		}
 
-		// Stop the queue if necessary
-		if (this.length === 0 || this._stopping) {
+		// When stopping, wait for the remaining active tasks to finish before stopping the queue
+		if (this._stopping) {
+			if (this._numRunningTasks === 0) {
+				this._finishStoppingQueue();
+			}
+		}
+
+		// Stop the queue if there's nothing left to do
+		else if (this.length === 0) {
 			this._finishStoppingQueue();
 		}
 
-		// Otherwise, call start again to run the next task
+		// Otherwise, fill the queue again to run the next task
 		else {
 			if (this._useAsyncTicking) {
-				setTimeout(() => this.start(), 0);
+				setTimeout(() => this._fill(), 0);
 			}
 			else {
-				this.start();
+				this._fill();
 			}
 		}
 	}

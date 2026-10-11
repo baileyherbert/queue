@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FunctionQueue, QueueGroup } from '../src';
-import { deferred, flush, track } from './helpers';
+import { deferred, flush, track, Tracked } from './helpers';
 
 beforeEach(() => {
 	vi.useFakeTimers();
@@ -436,6 +436,31 @@ describe('queue (via FunctionQueue)', () => {
 			await flush();
 			expect(second).toHaveBeenCalledTimes(1);
 		});
+
+		it('cancels a pending stop and continues processing tasks', async () => {
+			const queue = new FunctionQueue();
+			const first = controlled();
+			const second = controlled();
+			const stopped = vi.fn();
+			queue.on('stopped', stopped);
+
+			queue.push(first.task);
+			queue.push(second.task);
+			queue.stop();
+			queue.start();
+
+			first.finish();
+			await flush();
+
+			expect(second.task).toHaveBeenCalledTimes(1);
+			expect(stopped).not.toHaveBeenCalled();
+
+			second.finish();
+			await flush();
+
+			expect(stopped).toHaveBeenCalledTimes(1);
+			expect(queue.length).toBe(0);
+		});
 	});
 
 	describe('startAsync()', () => {
@@ -477,6 +502,48 @@ describe('queue (via FunctionQueue)', () => {
 			const queue = new FunctionQueue();
 
 			const result = track(queue.startAsync());
+			await flush();
+
+			expect(result.status).toBe('fulfilled');
+		});
+
+		it('starts the queue again after a previous call finished synchronously', async () => {
+			const queue = new FunctionQueue({ autoStart: false });
+			const first = vi.fn();
+			const second = vi.fn();
+
+			queue.push(first);
+			const firstResult = track(queue.startAsync());
+			await flush();
+
+			expect(firstResult.status).toBe('fulfilled');
+
+			queue.push(second);
+			const secondResult = track(queue.startAsync());
+			await flush();
+
+			expect(second).toHaveBeenCalledTimes(1);
+			expect(secondResult.status).toBe('fulfilled');
+		});
+
+		it('cancels a pending stop and resolves once the queue stops', async () => {
+			const queue = new FunctionQueue();
+			const first = controlled();
+			const second = controlled();
+
+			queue.push(first.task);
+			queue.push(second.task);
+			queue.stop();
+
+			const result = track(queue.startAsync());
+
+			first.finish();
+			await flush();
+
+			expect(second.task).toHaveBeenCalledTimes(1);
+			expect(result.status).toBe('pending');
+
+			second.finish();
 			await flush();
 
 			expect(result.status).toBe('fulfilled');
@@ -556,6 +623,60 @@ describe('queue (via FunctionQueue)', () => {
 
 			expect(queue.stop()).toBeUndefined();
 		});
+
+		it('does not start tasks pushed while stopping', async () => {
+			const queue = new FunctionQueue({ maxConcurrentTasks: 2 });
+			const first = controlled();
+			const pushed = vi.fn();
+
+			queue.push(first.task);
+			queue.stop();
+			queue.push(pushed);
+			await flush();
+
+			expect(pushed).not.toHaveBeenCalled();
+
+			first.finish();
+			await flush();
+
+			expect(pushed).not.toHaveBeenCalled();
+			expect(queue.active).toBe(false);
+			expect(queue.length).toBe(1);
+		});
+
+		it('does not start runImmediately tasks pushed while stopping', async () => {
+			const queue = new FunctionQueue();
+			const first = controlled();
+			const immediate = vi.fn();
+
+			queue.push(first.task);
+			queue.stop();
+			queue.push(immediate, { runImmediately: true });
+
+			expect(immediate).not.toHaveBeenCalled();
+
+			first.finish();
+			await flush();
+
+			expect(immediate).not.toHaveBeenCalled();
+			expect(queue.length).toBe(1);
+		});
+
+		it('stops the queue when called in between tasks', async () => {
+			const queue = new FunctionQueue({ autoStart: false });
+			const second = vi.fn();
+			const stopped = vi.fn();
+			queue.on('stopped', stopped);
+
+			queue.pushAsync(() => {}).then(() => queue.stop());
+			queue.push(second);
+			queue.start();
+			await flush();
+
+			expect(second).not.toHaveBeenCalled();
+			expect(stopped).toHaveBeenCalledTimes(1);
+			expect(queue.active).toBe(false);
+		});
 	});
 
 	describe('stopAsync()', () => {
@@ -601,6 +722,43 @@ describe('queue (via FunctionQueue)', () => {
 			const queue = new FunctionQueue();
 
 			const result = track(queue.stopAsync());
+			await flush();
+
+			expect(result.status).toBe('fulfilled');
+		});
+
+		it('resolves when called in between tasks', async () => {
+			const queue = new FunctionQueue({ autoStart: false });
+			const second = vi.fn();
+			let result: Tracked<void> | undefined;
+
+			queue.pushAsync(() => {}).then(() => result = track(queue.stopAsync()));
+			queue.push(second);
+			queue.start();
+			await flush();
+
+			expect(second).not.toHaveBeenCalled();
+			expect(result?.status).toBe('fulfilled');
+		});
+
+		it('resolves once the queue stops after the stop is cancelled with start()', async () => {
+			const queue = new FunctionQueue();
+			const first = controlled();
+			const second = controlled();
+
+			queue.push(first.task);
+			queue.push(second.task);
+
+			const result = track(queue.stopAsync());
+			queue.start();
+
+			first.finish();
+			await flush();
+
+			expect(second.task).toHaveBeenCalledTimes(1);
+			expect(result.status).toBe('pending');
+
+			second.finish();
 			await flush();
 
 			expect(result.status).toBe('fulfilled');
