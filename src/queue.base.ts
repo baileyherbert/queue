@@ -1,6 +1,7 @@
 import { QueueOptions, TaskOptions } from './common';
 import { EventEmitter } from './events';
 import { QueueGroup, TaskEventName } from './queue.group';
+import { scheduleTick } from './tick';
 
 /**
  * The shared implementation behind `FunctionQueue` and `ItemQueue`, which handles concurrency, timeouts, events, and
@@ -21,6 +22,7 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 
 	private _isFilling = false;
 	private _needsFill = false;
+	private _isTickScheduled = false;
 
 	private _tasks: InternalTaskRecord<T>[];
 	private _timeouts: Map<InternalTaskRecord<T>, any>;
@@ -266,6 +268,21 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	}
 
 	/**
+	 * Schedules the queue to be filled on the next tick, unless a tick is already scheduled. A single fill starts
+	 * tasks in all free slots, so tasks that finish before the tick don't need to schedule their own.
+	 */
+	private _scheduleFill() {
+		if (!this._isTickScheduled) {
+			this._isTickScheduled = true;
+
+			scheduleTick(() => {
+				this._isTickScheduled = false;
+				this._fill();
+			});
+		}
+	}
+
+	/**
 	 * Returns the `Promise` which resolves the next time the queue stops, creating it if necessary.
 	 */
 	private _getStopPromise() {
@@ -427,7 +444,7 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 		// Otherwise, fill the queue again to run the next task
 		else {
 			if (this._useAsyncTicking) {
-				setTimeout(() => this._fill(), 0);
+				this._scheduleFill();
 			}
 
 			// If the queue is already filling further up the stack, let it fill again rather than recursing

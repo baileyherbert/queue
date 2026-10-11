@@ -33,8 +33,9 @@ export interface QueueOptions {
 	/**
 	 * When a task completes, this option changes how the next task is started.
 	 *
-	 * If true, the next task will be scheduled to run after a few milliseconds with `setTimeout`. This will allow
-	 * promises to settle and other code in the application to execute if the queue has synchronous, blocking tasks.
+	 * If true, the next task will be scheduled to run on a future turn of the event loop (with `setImmediate` where
+	 * available, or `MessageChannel` in browsers). This will allow promises to settle and other code in the
+	 * application to execute if the queue has synchronous, blocking tasks.
 	 *
 	 * If false, the next task will be invoked immediately. As a result, task completion promises might resolve
 	 * after new tasks start, and compute-heavy tasks can slow the application overall.

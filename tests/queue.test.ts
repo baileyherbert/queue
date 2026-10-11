@@ -189,6 +189,22 @@ describe('queue (via FunctionQueue)', () => {
 			expect(order).toEqual(['first started', 'first settled', 'second started']);
 		});
 
+		it('is not slowed down by timer clamping with useAsyncTicking: true', async () => {
+			vi.useRealTimers();
+
+			const queue = new FunctionQueue({ autoStart: false });
+			const start = Date.now();
+
+			// Timers are clamped to at least 1ms in Node, so this would take at least 2 seconds with setTimeout
+			for (let i = 0; i < 2000; i++) {
+				queue.push(() => {});
+			}
+
+			await queue.startAsync();
+
+			expect(Date.now() - start).toBeLessThan(1000);
+		});
+
 		it('starts the next task immediately with useAsyncTicking: false', async () => {
 			const queue = new FunctionQueue({ autoStart: false, useAsyncTicking: false });
 			const order: string[] = [];
