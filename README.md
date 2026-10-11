@@ -9,15 +9,17 @@ This package offers two different types of queues, an `ItemQueue` and a `Functio
 
 # Getting started
 
-```
+```bash
 npm install @baileyherbert/queue
 ```
 
 That's all you need. There are zero dependencies, not even `events` – and it works in modern browsers!
 
+This package requires Node 22.12 or newer. It's an ES module, but CommonJS projects can still load it with `require()`.
+
 # Queues
 
-Below are the two types of queues exported by this package. Scroll down further to see the API reference, which is the same for both queues.
+Below are the two types of queues exported by this package. They share the same options, methods, and events, which are covered in each queue's documentation.
 
 ## `FunctionQueue`
 
@@ -42,7 +44,7 @@ The `ItemQueue` accepts a single processor function and allows you to queue indi
 import { ItemQueue } from '@baileyherbert/queue';
 
 const queue = new ItemQueue(function(str) {
-	console.log(str);
+    console.log(str);
 });
 
 queue.push('Do some work!');
@@ -66,6 +68,20 @@ await group.getCompletionPromise();
 ```
 
 [**📚 Click here for task group documentation.**](https://github.com/baileyherbert/queue/blob/master/docs/groups.md)
+
+## Yielding to the event loop
+
+Queues run tasks back-to-back for up to 1 millisecond (5 milliseconds in browsers), and then yield to the event loop before continuing. This lets timers, I/O, and the rest of your app keep running while a queue works through thousands of tasks, even when those tasks are synchronous.
+
+You can change how often a queue yields with the `yieldInterval` option:
+
+```ts
+// Yield after every task, so each task's promise settles before the next task starts
+const steadyQueue = new FunctionQueue({ yieldInterval: 0 });
+
+// Never yield, which is slightly faster but blocks the event loop until the queue is empty
+const fastQueue = new FunctionQueue({ yieldInterval: false });
+```
 
 # Benchmarks
 
@@ -128,3 +144,25 @@ How much memory the process used at its peak while working through the queue, ab
 | bottleneck | ≥ 508 MB | ≥ 2.19 GB |
 
 Measured with Node v24.12.0 on an AMD Ryzen 9 9950X3D (Linux, WSL2) on 2026-10-11, using the median of 5 runs against our `FunctionQueue` class. The other libraries' versions are pinned in [`package.json`](https://github.com/baileyherbert/queue/blob/master/package.json). See the [benchmark readme](https://github.com/baileyherbert/queue/tree/master/bench) for how the benchmarks work, what causes the failures, and how to run them yourself.
+
+# Upgrading from v2
+
+Version 3 includes the following breaking changes:
+
+- The package is now an ES module and requires Node 22.12 or newer. CommonJS projects can still load it with `require()`.
+- The `useAsyncTicking` option has been replaced with `yieldInterval`. Use `yieldInterval: 0` in place of `useAsyncTicking: true`, and `yieldInterval: false` in place of `useAsyncTicking: false`.
+- By default, queues now yield to the event loop every millisecond instead of after every task. As a result, a task's promise may not settle before the next task starts. Set `yieldInterval: 0` if you rely on that order.
+- Errors thrown by event listeners no longer affect the queue. They're rethrown asynchronously instead, so they're still reported as uncaught exceptions.
+- Tasks that throw or reject with something other than an `Error` now fail with an `Error` that keeps the original value as its `cause`. Rejecting with `undefined` now counts as a failure.
+
+# Development
+
+Install the dependencies, and then use these scripts:
+
+```bash
+npm run dev        # Run the tests in watch mode
+npm test           # Run the tests once
+npm run typecheck  # Type-check the source and tests
+npm run build      # Build the package into dist/
+npm run bench      # Run the benchmarks (takes around 20 minutes)
+```
