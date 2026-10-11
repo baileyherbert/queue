@@ -104,6 +104,27 @@ describe('queue (via FunctionQueue)', () => {
 			expect(queue.length).toBe(0);
 		});
 
+		it('does not exceed maxConcurrentTasks when a synchronous task finishes during start()', async () => {
+			const queue = new FunctionQueue({ autoStart: false, maxConcurrentTasks: 2, useAsyncTicking: false });
+			const counter = { running: 0, peak: 0 };
+
+			queue.push(() => {
+				counter.running++;
+				counter.peak = Math.max(counter.peak, counter.running);
+				counter.running--;
+			});
+
+			for (let i = 0; i < 3; i++) {
+				queue.push(counted(counter, 100));
+			}
+
+			queue.start();
+			await vi.advanceTimersByTimeAsync(1000);
+
+			expect(counter.peak).toBe(2);
+			expect(queue.length).toBe(0);
+		});
+
 		it('does not time out tasks by default (defaultTimeout: 0)', async () => {
 			const queue = new FunctionQueue();
 			const { task, finish } = controlled();

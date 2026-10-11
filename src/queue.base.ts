@@ -111,25 +111,26 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	}
 
 	/**
-	 * Starts the queue.
+	 * Starts the queue, running pending tasks until all free slots are filled. Tasks configured to `runImmediately`
+	 * at the front of the queue are started even when there are no free slots.
 	 */
 	public start() {
-		// Do nothing if there are no tasks to process
-		if (this._tasks.length === 0) {
-			return;
-		}
+		// Only fill the slots that are free right now, so a synchronous task that finishes during this loop doesn't
+		// free its slot for the next task (that's left to the tick, which respects `useAsyncTicking`)
+		const freeSlots = this._maxConcurrentTasks - this._numRunningTasks;
+		let numStarted = 0;
 
-		// If the queue is active, just check the first task to see if it's immediate and run it if so
-		if (this._numRunningTasks >= this._maxConcurrentTasks) {
-			if (this._tasks[0].options?.runImmediately) {
-				this._executeTask(this._tasks.shift()!);
+		while (this._tasks.length > 0) {
+			// Also check the live count, since synchronous ticking can start tasks from within this loop
+			const hasFreeSlot = numStarted < freeSlots && this._numRunningTasks < this._maxConcurrentTasks;
+
+			if (!hasFreeSlot && !this._tasks[0].options?.runImmediately) {
+				break;
 			}
 
-			return;
+			numStarted++;
+			this._executeTask(this._tasks.shift()!);
 		}
-
-		// Otherwise, run the next available task
-		this._executeTask(this._tasks.shift()!);
 	}
 
 	/**
