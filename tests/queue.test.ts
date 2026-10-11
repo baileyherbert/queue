@@ -201,6 +201,44 @@ describe('queue (via FunctionQueue)', () => {
 
 			expect(order).toEqual(['first started', 'second started', 'first settled']);
 		});
+
+		it('runs a long queue of synchronous tasks with useAsyncTicking: false', () => {
+			const queue = new FunctionQueue({ autoStart: false, useAsyncTicking: false });
+			const failed = vi.fn();
+			let numRan = 0;
+			queue.on('taskFailed', failed);
+
+			for (let i = 0; i < 100000; i++) {
+				queue.push(() => numRan++);
+			}
+
+			queue.start();
+
+			expect(numRan).toBe(100000);
+			expect(failed).not.toHaveBeenCalled();
+			expect(queue.length).toBe(0);
+		});
+
+		it('runs a long chain of synchronous tasks that push the next task with useAsyncTicking: false', () => {
+			const queue = new FunctionQueue({ useAsyncTicking: false });
+			const failed = vi.fn();
+			let numRan = 0;
+			queue.on('taskFailed', failed);
+
+			const task = () => {
+				numRan++;
+
+				if (numRan < 100000) {
+					queue.push(task);
+				}
+			};
+
+			queue.push(task);
+
+			expect(numRan).toBe(100000);
+			expect(failed).not.toHaveBeenCalled();
+			expect(queue.length).toBe(0);
+		});
 	});
 
 	describe('task options', () => {

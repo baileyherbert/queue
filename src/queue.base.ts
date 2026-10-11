@@ -19,6 +19,9 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	private _stopping = false;
 	private _numRunningTasks = 0;
 
+	private _isFilling = false;
+	private _needsFill = false;
+
 	private _tasks: InternalTaskRecord<T>[];
 	private _timeouts: Map<InternalTaskRecord<T>, any>;
 
@@ -209,31 +212,50 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 	 *
 	 * If the queue is stopping, no tasks are started. Instead, the stop is completed if there are no running tasks
 	 * left to wait for, which happens when `stop()` is called in between ticks.
+	 *
+	 * When `useAsyncTicking` is disabled, synchronous tasks that finish during this method request another fill with
+	 * `_needsFill` rather than calling this method recursively, so that the stack doesn't grow with each task.
 	 */
 	private _fill() {
-		if (this._stopping) {
-			if (this._numRunningTasks === 0) {
-				this._finishStoppingQueue();
+		// Remember if we're already filling further up the stack, since this can be called by tasks that push tasks
+		const wasFilling = this._isFilling;
+		this._isFilling = true;
+
+		try {
+			do {
+				this._needsFill = false;
+
+				if (this._stopping) {
+					if (this._numRunningTasks === 0) {
+						this._finishStoppingQueue();
+					}
+
+					return;
+				}
+
+				// Only fill the slots that are free right now, so a synchronous task that finishes during this loop
+				// doesn't free its slot for the next task (that's left to the tick, which respects `useAsyncTicking`)
+				const freeSlots = this._maxConcurrentTasks - this._numRunningTasks;
+				let numStarted = 0;
+
+				while (this._tasks.length > 0) {
+					// Also check the live count, since tasks can push and start other tasks from within this loop
+					const hasFreeSlot = numStarted < freeSlots && this._numRunningTasks < this._maxConcurrentTasks;
+
+					if (!hasFreeSlot && !this._tasks[0].options?.runImmediately) {
+						break;
+					}
+
+					numStarted++;
+					this._executeTask(this._tasks.shift()!);
+				}
 			}
 
-			return;
+			// Fill again if a synchronous tick was requested while filling
+			while (this._needsFill);
 		}
-
-		// Only fill the slots that are free right now, so a synchronous task that finishes during this loop doesn't
-		// free its slot for the next task (that's left to the tick, which respects `useAsyncTicking`)
-		const freeSlots = this._maxConcurrentTasks - this._numRunningTasks;
-		let numStarted = 0;
-
-		while (this._tasks.length > 0) {
-			// Also check the live count, since synchronous ticking can start tasks from within this loop
-			const hasFreeSlot = numStarted < freeSlots && this._numRunningTasks < this._maxConcurrentTasks;
-
-			if (!hasFreeSlot && !this._tasks[0].options?.runImmediately) {
-				break;
-			}
-
-			numStarted++;
-			this._executeTask(this._tasks.shift()!);
+		finally {
+			this._isFilling = wasFilling;
 		}
 	}
 
@@ -403,6 +425,12 @@ export abstract class BaseQueue<T> extends EventEmitter<QueueEvents<T>> {
 			if (this._useAsyncTicking) {
 				setTimeout(() => this._fill(), 0);
 			}
+
+			// If the queue is already filling further up the stack, let it fill again rather than recursing
+			else if (this._isFilling) {
+				this._needsFill = true;
+			}
+
 			else {
 				this._fill();
 			}
