@@ -6,7 +6,7 @@
 	"author": "Bailey Herbert <hello@bailey.sh> (https://bailey.sh)",
 	"repository": "github:baileyherbert/queue",
 	"engines": {
-		"node": ">=22"
+		"node": ">=22.12"
 	},
 	"type": "module",
 	"exports": {
