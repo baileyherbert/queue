@@ -1,7 +1,6 @@
 import { TaskOptions } from './common';
 import { EventEmitter } from './events';
-import { FunctionQueue } from './queue.function';
-import { ItemQueue } from './queue.item';
+import type { BaseQueue } from './queue.base';
 
 /**
  * This class is used to help manage separate groups of tasks in the same queue.
@@ -10,7 +9,7 @@ import { ItemQueue } from './queue.item';
  */
 export class QueueGroup<T> extends EventEmitter<Events<T>> {
 
-	private _queue: Queue;
+	private _queue: BaseQueue<T>;
 
 	private _active = true;
 	private _activeTasks: Set<T>;
@@ -18,7 +17,12 @@ export class QueueGroup<T> extends EventEmitter<Events<T>> {
 
 	private _listeners: Map<string, Function>;
 
-	public constructor(queue: Queue) {
+	/**
+	 * Constructs a new group for the given queue. Prefer `queue.createGroup()` over calling this directly.
+	 *
+	 * @param queue The queue that will process the group's tasks.
+	 */
+	public constructor(queue: BaseQueue<T>) {
 		super();
 
 		this._queue = queue;
@@ -59,7 +63,7 @@ export class QueueGroup<T> extends EventEmitter<Events<T>> {
 	 */
 	public push(item: T, options?: TaskOptions) {
 		this._pendingTasks.add(item);
-		this._queue.push(item as any, options);
+		this._queue.push(item, options);
 	}
 
 	/**
@@ -71,7 +75,7 @@ export class QueueGroup<T> extends EventEmitter<Events<T>> {
 	 */
 	public pushAsync(item: T, options?: TaskOptions): Promise<void> {
 		this._pendingTasks.add(item);
-		return this._queue.pushAsync(item as any, options);
+		return this._queue.pushAsync(item, options);
 	}
 
 	/**
@@ -154,8 +158,6 @@ export class QueueGroup<T> extends EventEmitter<Events<T>> {
 	}
 
 }
-
-type Queue = ItemQueue | FunctionQueue;
 
 
 /**
